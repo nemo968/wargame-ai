@@ -291,6 +291,7 @@ const initialState: GameState = {
   pendingOpFire:        null,
   movingUnitMCFailed:   false,
   setupSplitCol:        0,
+  axisSetupSplitCol:    0,
   secondPlayerActionPending: false,
   secondPlayerActionActive:  false,
   firstMoverSide:            null,
@@ -351,6 +352,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                       : /south edge/.test(axisSetup)  ? 'S' : null
 
     let setupSplitCol: number
+    let axisSetupSplitCol: number
     if (scenario.orientation === 'pointy-top') {
       const rows = scenario.hexes.map(h => h.row)
       const minRow = Math.min(...rows), maxRow = Math.max(...rows)
@@ -360,38 +362,37 @@ export const useGameStore = create<GameStore>((set, get) => ({
       else if (axisEdge   === 'N') setupSplitCol = minRow
       else if (axisEdge   === 'S') setupSplitCol = maxRow - 1
       else setupSplitCol = Math.round((minRow + maxRow) / 2)
+      axisSetupSplitCol = setupSplitCol
     } else {
       const cols = scenario.hexes.map(h => h.col)
       const minCol = Math.min(...cols), maxCol = Math.max(...cols)
 
-      // Detectar si el borde OESTE está en la columna de índice alto o bajo.
-      // En BoB, 'A' = columna más occidental. Si los hexes en minCol tienen
-      // origCoord empezando por 'A', el oeste está en minCol (normal).
-      // Si no (p.ej. 'I'), el mapa está ensamblado al revés y oeste = maxCol.
-      // Allied zona: col ≤ splitCol; Axis zona: col > splitCol
+      // Allied zona: col ≤ setupSplitCol; Axis zona: col > axisSetupSplitCol
       if (alliedEdge === 'W') {
         setupSplitCol = minCol          // Allied solo en borde W (col mínima)
       } else if (alliedEdge === 'E') {
-        setupSplitCol = maxCol - 1      // Allied casi todo el mapa, Axis solo borde E
+        setupSplitCol = maxCol - 1
       } else if (axisEdge === 'E') {
-        setupSplitCol = maxCol - 1      // Eje solo borde E
+        setupSplitCol = maxCol - 1
       } else if (axisEdge === 'W') {
         setupSplitCol = minCol
       } else {
         setupSplitCol = Math.round((minCol + maxCol) / 2)
       }
+      axisSetupSplitCol = setupSplitCol  // por defecto igual al aliado
 
-      // Si hay hexes de canal/río, el canal actúa como frontera de despliegue
+      // Si hay hexes de canal/río, el canal actúa como frontera del EJE únicamente
+      // (el borde aliado queda intacto en setupSplitCol)
       const canalCols = scenario.hexes
         .filter(h => h.terrain === 'RIO / CANAL')
         .map(h => h.col)
       if (canalCols.length > 0) {
         if (alliedEdge === 'W' || axisEdge === 'E') {
-          // Eje al este del canal → splitCol = columna más alta del canal
-          setupSplitCol = Math.max(...canalCols)
+          // Eje al este del canal
+          axisSetupSplitCol = Math.max(...canalCols)
         } else if (alliedEdge === 'E' || axisEdge === 'W') {
-          // Eje al oeste del canal → splitCol = columna más baja del canal
-          setupSplitCol = Math.min(...canalCols)
+          // Eje al oeste del canal
+          axisSetupSplitCol = Math.min(...canalCols)
         }
       }
     }
@@ -413,6 +414,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       units,
       smokeHexes: {},
       setupSplitCol,
+      axisSetupSplitCol,
     })
   },
 
@@ -1588,7 +1590,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // ── Setup Interactivo ──────────────────────────────────────────────────────
 
   placeUnitInSetup: (instanceId, hexId) => {
-    const { units, scenario, phase, activeSide, setupSplitCol } = get()
+    const { units, scenario, phase, activeSide, setupSplitCol, axisSetupSplitCol } = get()
     if (phase !== 'setup') return { ok: false, reason: 'Solo durante el Setup' }
     const unit = units[instanceId]
     if (!unit) return { ok: false, reason: 'Unidad no encontrada' }
@@ -1607,8 +1609,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const validZone = (sideConfig.setupMaps ?? []).length > 0
       ? sideConfig.setupMaps.includes(hex.origMap)
       : isPointyTop
-        ? (isAllied ? hex.row > setupSplitCol : hex.row <= setupSplitCol)
-        : (isAllied ? hex.col <= setupSplitCol : hex.col > setupSplitCol)
+        ? (isAllied ? hex.row > setupSplitCol : hex.row <= axisSetupSplitCol)
+        : (isAllied ? hex.col <= setupSplitCol : hex.col > axisSetupSplitCol)
     if (!validZone) return { ok: false, reason: 'Fuera de tu zona de despliegue' }
 
     // Validar stacking
@@ -1667,7 +1669,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       get().addLog({ side: activeSide, message: 'Despliegue completado. ¡Comienza la batalla!', type: 'phase' })
     }
 
-    void setupSplitCol // used in placeUnitInSetup
+    void setupSplitCol
   },
 
   useCommandPoint: (side) =>
@@ -1778,7 +1780,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       units: s.units, unitMPs: s.unitMPs, hexControl: s.hexControl,
       activatingUnit: s.activatingUnit, lastMoveUndo: s.lastMoveUndo, lastFireUndo: s.lastFireUndo,
       smokeHexes: s.smokeHexes, pendingOpFire: s.pendingOpFire,
-      movingUnitMCFailed: s.movingUnitMCFailed, setupSplitCol: s.setupSplitCol,
+      movingUnitMCFailed: s.movingUnitMCFailed, setupSplitCol: s.setupSplitCol, axisSetupSplitCol: s.axisSetupSplitCol,
       secondPlayerActionPending: s.secondPlayerActionPending,
       secondPlayerActionActive: s.secondPlayerActionActive,
       firstMoverSide: s.firstMoverSide, log: s.log,

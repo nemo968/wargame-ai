@@ -204,7 +204,8 @@ export interface GameState {
   smokeHexes:     Record<string, 'fresh' | 'dispersed'>  // hexId → estado del humo
   pendingOpFire:           PendingOpFire | null  // oportunidad de Op Fire tras movimiento enemigo
   movingUnitMCFailed:      boolean               // unidad en movimiento falló MC tras recibir Op Fire
-  setupSplitCol:           number                // col límite entre zonas de setup (calculado al cargar escenario)
+  setupSplitCol:           number                // col límite aliado: Allied zone = col <= setupSplitCol
+  axisSetupSplitCol:       number                // col límite eje: Axis zone = col > axisSetupSplitCol
   // ── Second Player Action (Señal de Mando) ──────────────────────────────────
   secondPlayerActionPending: boolean             // 2do jugador decidiendo si usar acción bonus (CP)
   secondPlayerActionActive:  boolean             // 2do jugador realizando su acción bonus
