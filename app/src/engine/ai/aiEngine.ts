@@ -534,6 +534,7 @@ export async function runAISetup(aiSide: ActiveSide): Promise<void> {
     const state     = gs()
     const { scenario, setupSplitCol, setupSplitInverted } = state
     if (!scenario) return
+    console.log('[AI Setup] aiSide=', aiSide, 'setupSplitCol=', setupSplitCol, 'setupSplitInverted=', setupSplitInverted)
 
     const aiFaction  = aiSide === 'allied' ? scenario.allied.faction : scenario.axis.faction
 
