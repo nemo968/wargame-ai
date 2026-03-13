@@ -1,0 +1,26 @@
+⏺ Sí, totalmente suficiente. Copias la carpeta entera por iCloud/Drive y en el Mac nuevo:                                                                                                                   
+                                                                                                                                                                                                           
+  cd wargame-ai/app                                                                                                                                                                                         
+  npm install
+  npm run dev                                                                                                                                                                                               
+                                                                
+  Y ya está funcionando. npm install regenera node_modules automáticamente leyendo package.json.
+
+  Lo único adicional si quieres las herramientas Python:
+  pip3 install matplotlib numpy
+
+  Y Claude Code CLI ya lo tienes instalado. Con eso tienes todo.
+
+  cd /Users/guillermo/wargame-ai/app                                                                                                  
+  npm run dev                                                                                                                         
+                                                                                                                                      
+  Abre el navegador en http://localhost:5173                                                                                          
+                                                            
+  ---
+  Si es la primera vez (o tras clonar/copiar el proyecto en otra máquina):
+
+  cd /Users/guillermo/wargame-ai/app
+  npm install   # solo la primera vez
+  npm run dev
+
+  Para parar el servidor: Ctrl+C en la terminal.

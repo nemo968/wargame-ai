@@ -1,0 +1,262 @@
+====================================================================
+  HERRAMIENTA DE MONTAJE DE MAPAS HEXAGONALES
+  Guía de uso
+====================================================================
+
+REQUISITOS
+----------
+  Python 3.8 o superior
+  matplotlib >= 3.5
+  numpy >= 1.21
+
+  Instalar dependencias:
+    pip3 install matplotlib numpy
+
+
+ESTRUCTURA DEL PROYECTO
+------------------------
+  mi_proyecto/
+    Mallas/
+      Map1.csv ... Map10.csv   <- mallas lógicas individuales
+    herramienta_mapas/
+      hex_mesh.py              <- clase HexMesh (carga, rotación, exportación)
+      assembler.py             <- clase MapAssembler (unión de mapas)
+      visualizer.py            <- visualización gráfica (matplotlib)
+      main.py                  <- ejemplos y CLI
+
+
+====================================================================
+  USO DESDE PYTHON (API)
+====================================================================
+
+1. CARGAR UN MAPA
+-----------------
+  from herramienta_mapas.hex_mesh import HexMesh
+
+  m = HexMesh()
+  m.load_csv('Mallas/Map1.csv', name='Map1')
+
+  # Ver información del mapa
+  print(m)
+  # HexMesh('Map1', flat-top, cols=A-I, rows=0-9, hexs=85)
+
+
+2. ROTAR UN MAPA
+----------------
+  Ángulos soportados: 90, 180, 270 (en sentido horario).
+  rotate() devuelve una NUEVA malla; el original no se modifica.
+
+  rot180 = m.rotate(180)   # flat-top → flat-top,    cols A-I, rows 0-9
+  rot90  = m.rotate(90)    # flat-top → pointy-top,  cols A-S, rows 0-4
+  rot270 = m.rotate(270)   # flat-top → pointy-top,  cols A-S, rows 0-4
+
+  Nota sobre 90°/270°:
+    Al rotar 90° o 270°, los hexágonos pasan de orientación flat-top a
+    pointy-top (y viceversa). Esto es geometricamente correcto cuando se
+    rota físicamente un tablero rectangular. Los lados se remapean:
+      90° CW:  N→E, NE→SE, SE→SW, S→W, SW→NW, NW→NE
+      180°:    N→S, NE→SW, SE→NW  (y sus inversos)
+      270° CW: N→W, NE→NW, SE→NE, S→E, SW→SE, NW→SW
+
+  Encadenamiento:
+    rot360 = m.rotate(90).rotate(90).rotate(90).rotate(90)  # = original
+
+
+3. UNIR MAPAS (MapAssembler)
+-----------------------------
+  from herramienta_mapas.assembler import MapAssembler
+
+  asm = MapAssembler()
+  asm.add_map(mesh, grid_row=0, grid_col=0, rotation=0)
+
+  Parámetros de add_map():
+    mesh      -> objeto HexMesh a añadir
+    grid_row  -> fila en la cuadrícula de mapas (0 = arriba)
+    grid_col  -> columna en la cuadrícula de mapas (0 = izquierda)
+    rotation  -> 0, 90, 180 o 270 (grados en sentido horario)
+
+  resultado = asm.assemble()   # devuelve una nueva HexMesh global
+
+  --- Unión horizontal (dos mapas lado a lado) ---
+
+    m1 = HexMesh().load_csv('Mallas/Map1.csv', 'Map1')
+    m2 = HexMesh().load_csv('Mallas/Map2.csv', 'Map2')
+
+    asm = MapAssembler()
+    asm.add_map(m1, grid_row=0, grid_col=0)
+    asm.add_map(m2, grid_row=0, grid_col=1)
+    joined = asm.assemble()
+    # Resultado: cols A-Q, 161 hexes (85+85 - 9 semihexes fusionados)
+
+  --- Unión vertical (dos mapas apilados) ---
+
+    asm = MapAssembler()
+    asm.add_map(m1, grid_row=0, grid_col=0)
+    asm.add_map(m2, grid_row=1, grid_col=0)
+    joined = asm.assemble()
+    # Resultado: cols A-I, rows 0-18, 166 hexes (85+85 - 4 semihexes fusionados)
+
+  --- Grid 2x2 con rotaciones ---
+
+    m3 = HexMesh().load_csv('Mallas/Map3.csv', 'Map3')
+    m4 = HexMesh().load_csv('Mallas/Map4.csv', 'Map4')
+
+    asm = MapAssembler()
+    asm.add_map(m1, grid_row=0, grid_col=0, rotation=0)
+    asm.add_map(m2, grid_row=0, grid_col=1, rotation=180)
+    asm.add_map(m3, grid_row=1, grid_col=0, rotation=0)
+    asm.add_map(m4, grid_row=1, grid_col=1, rotation=180)
+    joined = asm.assemble()
+    # Resultado: cols A-Q, rows 0-18, 314 hexes
+
+  Fusión de semihexes en las uniones:
+    - Horizontal: la columna I del mapa izquierdo y la columna A del mapa
+      derecho se fusionan en una única columna de hexes completos.
+    - Vertical: la fila 9 del mapa superior (B9,D9,F9,H9) y la fila 0 del
+      mapa inferior (B0,D0,F0,H0) se fusionan en una única fila.
+    - Si los dos semihexes tienen seto en un lado, el hex fusionado también lo tiene.
+    - El terreno del hex fusionado proviene del mapa izquierdo/superior.
+
+
+4. VISUALIZACIÓN
+----------------
+  import matplotlib.pyplot as plt
+  from herramienta_mapas import visualizer as viz
+
+  --- Un solo mapa ---
+    fig = viz.show_single(m)
+    plt.show()
+
+    # Con título personalizado:
+    fig = viz.show_single(m, title='Map1 rotado 90°')
+    plt.show()
+
+  --- Comparar original y rotado ---
+    fig, axes = plt.subplots(1, 2, figsize=(14, 7))
+    viz.draw_mesh(m,        ax=axes[0], title='Original')
+    viz.draw_mesh(m.rotate(180), ax=axes[1], title='Rotado 180°')
+    plt.tight_layout()
+    plt.show()
+
+  --- Panel de montaje (mapas individuales + resultado final) ---
+    fig = viz.draw_assembly(
+        [(m1, 'Map1'), (m2, 'Map2 rot180°')],
+        joined,
+        title='Unión horizontal'
+    )
+    plt.show()
+
+  Colores por tipo de terreno:
+    TERRENO ABIERTO  -> verde claro
+    CARRETERA        -> beige/gris
+    BOSQUE           -> verde oscuro
+    BOSQUE DENSO     -> verde muy oscuro
+    PANTANO          -> azul grisáceo
+    AGUA             -> azul claro
+    EDIF. PIEDRA     -> marrón rojizo
+    EDIF. MADERA     -> marrón claro
+    COLINA           -> amarillo ocre
+    (otros)          -> gris claro
+
+  Los setos aparecen como líneas verdes gruesas sobre los lados
+  correspondientes del hexágono.
+
+
+5. EXPORTAR A CSV
+-----------------
+  joined.export_csv('mi_mapa_montado.csv')
+
+  El CSV exportado mantiene el mismo formato que los ficheros originales
+  (columnas: Coordenada, Terreno, Elevacion, Upper_Level, Fortificacion,
+  Lado_N/NE/SE/S/SW/NW) con las nuevas coordenadas globales.
+
+  Nota: para mapas rotados 90°/270° (pointy-top), los lados del CSV
+  son Lado_NE, Lado_E, Lado_SE, Lado_SW, Lado_W, Lado_NW.
+
+
+6. ACCEDER A DATOS DE UN HEX
+-----------------------------
+  # Obtener el hex en la coordenada B5 (col_idx=1, row=5)
+  hex_data = m.hexes.get((1, 5))
+
+  print(hex_data.terrain)        # 'CARRETERA'
+  print(hex_data.elevation)      # 0
+  print(hex_data.upper_level)    # False
+  print(hex_data.fortification)  # 'NINGUNA'
+  print(hex_data.sides)          # {'N': False, 'NE': False, ...}
+  print(hex_data.sides['NE'])    # True/False (si hay seto al NE)
+
+  # Convertir letra de columna a índice y viceversa:
+  HexMesh.col_letter_to_idx('B')   # -> 1
+  HexMesh.col_idx_to_letter(16)    # -> 'Q'
+
+
+====================================================================
+  USO DESDE LÍNEA DE COMANDOS (CLI)
+====================================================================
+
+Ejecutar desde el directorio mi_proyecto/:
+
+  --- Ver un mapa ---
+    python3 -m herramienta_mapas.main show 1
+    python3 -m herramienta_mapas.main show 1 --rot 180
+    python3 -m herramienta_mapas.main show 3 --rot 90
+
+  --- Unir mapas ---
+    # Dos mapas lado a lado (horizontal):
+    python3 -m herramienta_mapas.main join --maps 1 2 --layout 1x2
+
+    # Dos mapas apilados (vertical):
+    python3 -m herramienta_mapas.main join --maps 1 2 --layout 2x1
+
+    # Con rotaciones (formato ID:ANGULO):
+    python3 -m herramienta_mapas.main join --maps 1 2:180 --layout 1x2
+
+    # Grid 2x2 con rotaciones:
+    python3 -m herramienta_mapas.main join --maps 1 2:180 3 4:180 --layout 2x2
+
+    # Exportar a CSV:
+    python3 -m herramienta_mapas.main join --maps 1 2 --layout 1x2 --output resultado.csv
+
+  --- Demo interactivo (sin argumentos) ---
+    python3 -m herramienta_mapas.main
+
+
+====================================================================
+  COORDENADAS GLOBALES
+====================================================================
+
+Las coordenadas globales del mapa ensamblado siguen el mismo formato
+que los mapas individuales: letra(s) + número.
+
+  Columnas: A, B, C, ... Z, AA, AB, ... (sin límite)
+  Filas:    0, 1, 2, 3, ... (sin límite)
+
+Ejemplos de dimensiones según tipo de unión:
+  Un mapa individual:       cols A-I  (9 cols),  rows 0-9  (10 filas)
+  Dos mapas horizontal:     cols A-Q  (17 cols), rows 0-9  (10 filas)
+  Dos mapas vertical:       cols A-I  (9 cols),  rows 0-18 (19 filas)
+  Grid 2x2:                 cols A-Q  (17 cols), rows 0-18 (19 filas)
+  Mapa rotado 90° (solo):   cols A-S  (19 cols), rows 0-4  (5 filas)
+
+
+====================================================================
+  NOTAS TÉCNICAS
+====================================================================
+
+  - Internamente se usan "coordenadas dobles" (dc_col, dc_row) que
+    permiten rotaciones exactas con aritmética entera.
+
+  - La identidad se cumple: rotar 4 veces 90° devuelve la malla original
+    (mismas coordenadas, mismos datos, mismos lados).
+
+  - Los mapas individuales tienen 85 hexágonos cada uno:
+    5 columnas pares (A,C,E,G,I) × 9 filas (1-9) = 45
+    4 columnas impares (B,D,F,H) × 10 filas (0-9) = 40
+    Total: 85
+
+  - Las columnas A e I son semihexes cortados verticalmente.
+    Las coordenadas B0,B9,D0,D9,F0,F9,H0,H9 son semihexes cortados
+    horizontalmente. No existen A0, C0, E0, G0, I0.
+
+====================================================================
