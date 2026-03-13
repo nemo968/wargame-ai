@@ -465,6 +465,7 @@ export default function App() {
             smokeMode={smokeMode}
             setupHighlight={phase === 'setup' ? { splitCol: setupSplitCol, side: activeSide } : null}
             opFireTargetHex={pendingOpFire?.enteredHexId ?? null}
+            playerFaction={playerFaction}
           />
           <div className="absolute top-3 left-3 flex items-center gap-2">
             <div className="bg-panel/80 border border-border-military rounded px-3 py-1 pointer-events-none">

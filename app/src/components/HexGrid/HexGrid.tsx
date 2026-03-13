@@ -76,6 +76,8 @@ interface HexGridProps {
   setupHighlight?: { splitCol: number; side: 'allied' | 'axis' } | null
   // Op Fire target hex
   opFireTargetHex?: string | null
+  // Fog of war
+  playerFaction?: string | null
 }
 
 interface VB { x: number; y: number; w: number; h: number }
@@ -103,6 +105,7 @@ export default function HexGrid({
   smokeMode = false,
   setupHighlight = null,
   opFireTargetHex = null,
+  playerFaction = null,
 }: HexGridProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const svgRef       = useRef<SVGSVGElement>(null)
@@ -291,6 +294,7 @@ export default function HexGrid({
                         : hex.col > setupHighlight.splitCol))
                 : false}
               isOpFireTarget={hex.id === opFireTargetHex}
+              playerFaction={playerFaction}
             />
           ))}
         </g>
@@ -325,6 +329,7 @@ interface HexCellProps {
   smokeMode?:         boolean
   isSetupZone?:       boolean
   isOpFireTarget?:    boolean
+  playerFaction?:     string | null
 }
 
 function HexCell({
@@ -335,6 +340,7 @@ function HexCell({
   smokeState, smokeMode = false,
   isSetupZone = false,
   isOpFireTarget = false,
+  playerFaction = null,
 }: HexCellProps) {
   const [cx, cy] = hexCenterFromGrid(hex.col, hex.row, orientation, hexSize)
   const pts = hexVertexString(cx, cy, hexSize, orientation)
@@ -493,6 +499,7 @@ function HexCell({
             isSelected={unit.instanceId === selectedUnit}
             onUnitClick={onUnitClick}
             onUnitRightClick={onUnitRightClick}
+            fogOfWar={!!playerFaction && unit.isConcealed && unit.faction !== playerFaction}
           />
         )
       })}
@@ -517,9 +524,10 @@ interface UnitCounterProps {
   isSelected:         boolean
   onUnitClick:        (instanceId: string, e: React.MouseEvent) => void
   onUnitRightClick?:  (instanceId: string) => void
+  fogOfWar?:          boolean  // unidad enemiga oculta — no revelar detalles
 }
 
-function UnitCounter({ unit, unitType, cx, cy, cW, cH, isSelected, onUnitClick, onUnitRightClick }: UnitCounterProps) {
+function UnitCounter({ unit, unitType, cx, cy, cW, cH, isSelected, onUnitClick, onUnitRightClick, fogOfWar = false }: UnitCounterProps) {
   const faction  = unit.faction
   const category = unitType?.category ?? 'squad'
   const bg       = FACTION_BG[faction]       ?? '#888'
@@ -545,6 +553,24 @@ function UnitCounter({ unit, unitType, cx, cy, cW, cH, isSelected, onUnitClick, 
   const opacity = unit.isUsed ? 0.58 : 1.0
 
   const isVehicleOrGun = category === 'vehicle' || category === 'gun'
+
+  // Fog of war: unidad enemiga oculta — solo mostrar silueta anónima
+  if (fogOfWar) {
+    return (
+      <g
+        onClick={(e) => { e.stopPropagation(); onUnitClick(unit.instanceId, e) }}
+        style={{ cursor: 'pointer' }}
+      >
+        <rect x={left} y={top} width={cW} height={cH} fill={bg} stroke={border} strokeWidth={1.5} rx={2} />
+        <text
+          x={cx} y={cy + cH * 0.08}
+          textAnchor="middle" dominantBaseline="middle"
+          fontSize={cH * 0.45} fill={silCol} opacity={0.6}
+          style={{ pointerEvents: 'none' }}
+        >?</text>
+      </g>
+    )
+  }
 
   return (
     <g
