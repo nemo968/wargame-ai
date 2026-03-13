@@ -383,7 +383,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
           setupSplitCol = maxCol - 1    // Allied solo en col maxCol = borde W invertido
           setupSplitInverted = true
         }
-        console.log('[Setup] alliedEdge=W minCol=', minCol, 'maxCol=', maxCol, 'minColLetter=', minColLetter, 'westAtMinCol=', westAtMinCol, '→ splitCol=', setupSplitCol, 'inverted=', setupSplitInverted)
       } else if (alliedEdge === 'E') {
         setupSplitCol = maxCol - 1      // Allied casi todo el mapa, Axis solo borde E
       } else if (axisEdge === 'E') {
