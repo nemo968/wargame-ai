@@ -156,7 +156,7 @@ export function parseScenarioCSV(raw: string): Scenario {
 }
 
 export async function loadScenario(num: string): Promise<Scenario> {
-  const url = `/Scenario%20${num}.csv`
+  const url = `${import.meta.env.BASE_URL}Scenario%20${num}.csv`
   const res = await fetch(url)
   if (!res.ok) throw new Error(`No se pudo cargar el escenario ${num}`)
   const text = await res.text()
@@ -166,7 +166,7 @@ export async function loadScenario(num: string): Promise<Scenario> {
 }
 
 export async function loadScenarioIndex(): Promise<{ num: string; url: string }[]> {
-  const res = await fetch('/scenarios.json')
+  const res = await fetch(`${import.meta.env.BASE_URL}scenarios.json`)
   if (!res.ok) return []
   return res.json()
 }
