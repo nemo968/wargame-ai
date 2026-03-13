@@ -205,7 +205,6 @@ export interface GameState {
   pendingOpFire:           PendingOpFire | null  // oportunidad de Op Fire tras movimiento enemigo
   movingUnitMCFailed:      boolean               // unidad en movimiento falló MC tras recibir Op Fire
   setupSplitCol:           number                // col límite entre zonas de setup (calculado al cargar escenario)
-  setupSplitInverted:      boolean               // true cuando Allied entra por el borde de col alta (ej. borde W en mapas ensamblados al revés)
   // ── Second Player Action (Señal de Mando) ──────────────────────────────────
   secondPlayerActionPending: boolean             // 2do jugador decidiendo si usar acción bonus (CP)
   secondPlayerActionActive:  boolean             // 2do jugador realizando su acción bonus
