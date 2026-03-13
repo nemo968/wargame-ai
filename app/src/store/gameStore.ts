@@ -351,7 +351,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
                       : /south edge/.test(axisSetup)  ? 'S' : null
 
     let setupSplitCol: number
-    let setupSplitInverted = false
     if (scenario.orientation === 'pointy-top') {
       const rows = scenario.hexes.map(h => h.row)
       const minRow = Math.min(...rows), maxRow = Math.max(...rows)
@@ -380,6 +379,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
         setupSplitCol = minCol
       } else {
         setupSplitCol = Math.round((minCol + maxCol) / 2)
+      }
+
+      // Si hay hexes de canal/río, el canal actúa como frontera de despliegue
+      const canalCols = scenario.hexes
+        .filter(h => h.terrain === 'RIO / CANAL')
+        .map(h => h.col)
+      if (canalCols.length > 0) {
+        if (alliedEdge === 'W' || axisEdge === 'E') {
+          // Eje al este del canal → splitCol = columna más alta del canal
+          setupSplitCol = Math.max(...canalCols)
+        } else if (alliedEdge === 'E' || axisEdge === 'W') {
+          // Eje al oeste del canal → splitCol = columna más baja del canal
+          setupSplitCol = Math.min(...canalCols)
+        }
       }
     }
 
