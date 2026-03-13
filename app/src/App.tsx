@@ -24,7 +24,7 @@ export default function App() {
     selectedUnit, selectedHex,
     log, isAIThinking,
     activatingUnit, lastMoveUndo, lastFireUndo,
-    pendingOpFire, setupSplitCol,
+    pendingOpFire, setupSplitCol, setupSplitInverted,
     secondPlayerActionPending, secondPlayerActionActive, firstMoverSide,
     loadScenario, selectUnit, selectHex,
     nextPhase, updateUnit,
@@ -467,6 +467,7 @@ export default function App() {
               splitCol: setupSplitCol,
               side: activeSide,
               maps: activeSide === 'allied' ? scenario.allied.setupMaps : scenario.axis.setupMaps,
+              inverted: setupSplitInverted,
             } : null}
             opFireTargetHex={pendingOpFire?.enteredHexId ?? null}
             playerFaction={playerFaction}

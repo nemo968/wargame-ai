@@ -532,7 +532,7 @@ export async function runAISetup(aiSide: ActiveSide): Promise<void> {
 
   try {
     const state     = gs()
-    const { scenario, setupSplitCol } = state
+    const { scenario, setupSplitCol, setupSplitInverted } = state
     if (!scenario) return
 
     const aiFaction  = aiSide === 'allied' ? scenario.allied.faction : scenario.axis.faction
@@ -560,9 +560,10 @@ export async function runAISetup(aiSide: ActiveSide): Promise<void> {
       if (h.terrain === 'RIO / CANAL') return false
       if (aiSetupMaps.length > 0) return aiSetupMaps.includes(h.origMap)
       if (scenario.orientation === 'flat-top') {
-        return aiSide === 'allied'
-          ? h.col <= setupSplitCol
-          : h.col > setupSplitCol
+        if (setupSplitInverted) {
+          return aiSide === 'allied' ? h.col > setupSplitCol : h.col <= setupSplitCol
+        }
+        return aiSide === 'allied' ? h.col <= setupSplitCol : h.col > setupSplitCol
       } else {
         return aiSide === 'allied'
           ? h.row > setupSplitCol

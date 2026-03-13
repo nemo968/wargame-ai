@@ -291,6 +291,7 @@ const initialState: GameState = {
   pendingOpFire:        null,
   movingUnitMCFailed:   false,
   setupSplitCol:        0,
+  setupSplitInverted:   false,
   secondPlayerActionPending: false,
   secondPlayerActionActive:  false,
   firstMoverSide:            null,
@@ -351,6 +352,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                       : /south edge/.test(axisSetup)  ? 'S' : null
 
     let setupSplitCol: number
+    let setupSplitInverted = false
     if (scenario.orientation === 'pointy-top') {
       const rows = scenario.hexes.map(h => h.row)
       const minRow = Math.min(...rows), maxRow = Math.max(...rows)
@@ -363,12 +365,33 @@ export const useGameStore = create<GameStore>((set, get) => ({
     } else {
       const cols = scenario.hexes.map(h => h.col)
       const minCol = Math.min(...cols), maxCol = Math.max(...cols)
-      // Allied zona: col ≤ splitCol; Axis zona: col > splitCol
-      if      (alliedEdge === 'W') setupSplitCol = minCol        // solo borde W
-      else if (alliedEdge === 'E') setupSplitCol = maxCol - 1    // casi todo el mapa para aliados
-      else if (axisEdge   === 'E') setupSplitCol = maxCol - 1    // eje solo borde E
-      else if (axisEdge   === 'W') setupSplitCol = minCol
-      else setupSplitCol = Math.round((minCol + maxCol) / 2)
+
+      // Detectar si el borde OESTE está en la columna de índice alto o bajo.
+      // En BoB, 'A' = columna más occidental. Si los hexes en minCol tienen
+      // origCoord empezando por 'A', el oeste está en minCol (normal).
+      // Si no (p.ej. 'I'), el mapa está ensamblado al revés y oeste = maxCol.
+      const minColHexes = scenario.hexes.filter(h => h.col === minCol)
+      const minColLetter = (minColHexes[0]?.origCoord?.[0] ?? 'A').toUpperCase()
+      const westAtMinCol = minColLetter === 'A'
+
+      // Allied zona (normal):  col ≤ splitCol
+      // Allied zona (invertida): col > splitCol  (Allied entra por col alta)
+      if (alliedEdge === 'W') {
+        if (westAtMinCol) {
+          setupSplitCol = minCol        // Allied solo en col 0 = borde W normal
+        } else {
+          setupSplitCol = maxCol - 1    // Allied solo en col maxCol = borde W invertido
+          setupSplitInverted = true
+        }
+      } else if (alliedEdge === 'E') {
+        setupSplitCol = maxCol - 1      // Allied casi todo el mapa, Axis solo borde E
+      } else if (axisEdge === 'E') {
+        setupSplitCol = maxCol - 1      // Eje solo borde E
+      } else if (axisEdge === 'W') {
+        setupSplitCol = minCol
+      } else {
+        setupSplitCol = Math.round((minCol + maxCol) / 2)
+      }
     }
 
     // El bando que hace setup primero según scenario.setupFirst
@@ -388,6 +411,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       units,
       smokeHexes: {},
       setupSplitCol,
+      setupSplitInverted,
     })
   },
 
@@ -1563,7 +1587,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // ── Setup Interactivo ──────────────────────────────────────────────────────
 
   placeUnitInSetup: (instanceId, hexId) => {
-    const { units, scenario, phase, activeSide, setupSplitCol } = get()
+    const { units, scenario, phase, activeSide, setupSplitCol, setupSplitInverted } = get()
     if (phase !== 'setup') return { ok: false, reason: 'Solo durante el Setup' }
     const unit = units[instanceId]
     if (!unit) return { ok: false, reason: 'Unidad no encontrada' }
@@ -1583,7 +1607,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ? sideConfig.setupMaps.includes(hex.origMap)
       : isPointyTop
         ? (isAllied ? hex.row > setupSplitCol : hex.row <= setupSplitCol)
-        : (isAllied ? hex.col <= setupSplitCol : hex.col > setupSplitCol)
+        : setupSplitInverted
+          ? (isAllied ? hex.col > setupSplitCol : hex.col <= setupSplitCol)
+          : (isAllied ? hex.col <= setupSplitCol : hex.col > setupSplitCol)
     if (!validZone) return { ok: false, reason: 'Fuera de tu zona de despliegue' }
 
     // Validar stacking
@@ -1753,7 +1779,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       units: s.units, unitMPs: s.unitMPs, hexControl: s.hexControl,
       activatingUnit: s.activatingUnit, lastMoveUndo: s.lastMoveUndo, lastFireUndo: s.lastFireUndo,
       smokeHexes: s.smokeHexes, pendingOpFire: s.pendingOpFire,
-      movingUnitMCFailed: s.movingUnitMCFailed, setupSplitCol: s.setupSplitCol,
+      movingUnitMCFailed: s.movingUnitMCFailed, setupSplitCol: s.setupSplitCol, setupSplitInverted: s.setupSplitInverted,
       secondPlayerActionPending: s.secondPlayerActionPending,
       secondPlayerActionActive: s.secondPlayerActionActive,
       firstMoverSide: s.firstMoverSide, log: s.log,
@@ -1772,6 +1798,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         data.scenario.allied.setupMaps ??= []
         data.scenario.axis.setupMaps   ??= []
       }
+      // Migración: añadir setupSplitInverted si falta
+      data.setupSplitInverted ??= false
       set({
         ...data,
         selectedUnit: null, selectedHex: null, isAIThinking: false,
