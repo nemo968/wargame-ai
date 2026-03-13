@@ -336,15 +336,39 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Para flat-top: split por col (aliados: col ≤ splitCol; eje: col > splitCol)
     // Para pointy-top: los tableros se unen por la dimensión row → split por row
     //   (eje: row ≤ splitCol; aliados: row > splitCol) — splitCol reutilizado como valor row
+    //
+    // Si el texto de despliegue indica "enter the West/East edge", la zona se limita
+    // a la columna de borde correspondiente (1 columna) en lugar del punto medio.
+    const alliedSetup = scenario.allied.setupDesc.toLowerCase()
+    const axisSetup   = scenario.axis.setupDesc.toLowerCase()
+    const alliedEdge: string | null = /west edge/.test(alliedSetup) ? 'W'
+                      : /east edge/.test(alliedSetup) ? 'E'
+                      : /north edge/.test(alliedSetup) ? 'N'
+                      : /south edge/.test(alliedSetup) ? 'S' : null
+    const axisEdge: string | null   = /east edge/.test(axisSetup)   ? 'E'
+                      : /west edge/.test(axisSetup)   ? 'W'
+                      : /north edge/.test(axisSetup)  ? 'N'
+                      : /south edge/.test(axisSetup)  ? 'S' : null
+
     let setupSplitCol: number
     if (scenario.orientation === 'pointy-top') {
       const rows = scenario.hexes.map(h => h.row)
       const minRow = Math.min(...rows), maxRow = Math.max(...rows)
-      setupSplitCol = Math.round((minRow + maxRow) / 2)
+      // Allied zona: row > splitCol; Axis zona: row ≤ splitCol
+      if      (alliedEdge === 'S') setupSplitCol = maxRow - 1
+      else if (alliedEdge === 'N') setupSplitCol = minRow
+      else if (axisEdge   === 'N') setupSplitCol = minRow
+      else if (axisEdge   === 'S') setupSplitCol = maxRow - 1
+      else setupSplitCol = Math.round((minRow + maxRow) / 2)
     } else {
       const cols = scenario.hexes.map(h => h.col)
       const minCol = Math.min(...cols), maxCol = Math.max(...cols)
-      setupSplitCol = Math.round((minCol + maxCol) / 2)
+      // Allied zona: col ≤ splitCol; Axis zona: col > splitCol
+      if      (alliedEdge === 'W') setupSplitCol = minCol        // solo borde W
+      else if (alliedEdge === 'E') setupSplitCol = maxCol - 1    // casi todo el mapa para aliados
+      else if (axisEdge   === 'E') setupSplitCol = maxCol - 1    // eje solo borde E
+      else if (axisEdge   === 'W') setupSplitCol = minCol
+      else setupSplitCol = Math.round((minCol + maxCol) / 2)
     }
 
     // El bando que hace setup primero según scenario.setupFirst
