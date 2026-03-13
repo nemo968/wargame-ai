@@ -121,6 +121,7 @@ export interface SideConfig {
   routEdge:     string        // 'N' | 'S' | 'E' | 'W' | 'NE' etc.
   setupDesc:    string
   altSetupDesc: string
+  setupMaps:    number[]      // tableros válidos para el despliegue inicial (vacío = usar splitCol)
 }
 
 export interface ScenarioUnitEntry {

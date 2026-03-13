@@ -14,6 +14,7 @@ Puntos_comando;1
 Ruta_huida;W
 Despliegue_inicial;Despliegue A (mapa 5): 2 escuadras + 1 Bazooka + 2 Decoys en cualquier hex. Despliegue B (mapa 3): 4 escuadras + 2 Bazookas + 2 MGs + 4 Decoys + 4 cañones 57mm en cualquier hex. Refuerzos turno 4: 4 escuadras + 2 Bazookas entran por el borde Sur del mapa 1 y/o borde Oeste del mapa 1 filas A–E. Refuerzos turno 5: 5 escuadras entran por el borde Oeste del mapa 3.
 Despliegue_alternativo;El jugador americano puede cambiar cualquier Escuadra Bazooka para añadir un MG WT a ese grupo.
+Zona_despliegue;3,5
 
 [EJE]
 Faccion;German
@@ -22,6 +23,7 @@ Puntos_comando;2
 Ruta_huida;E
 Despliegue_inicial;Turno 1 borde Este mapas 6 y 9: 13 escuadras + 3 MG WT + 1 Mortar WT + 2 PzIVH + 2 PzVIE. Turno 2 borde Norte mapa 5: 5 escuadras + 1 PzVIE. Turno 3 borde Este mapas 6 y 9: 2 PzVG. Ruta de huida: Norte para unidades en mapa 5; Este para el resto.
 Despliegue_alternativo;
+Zona_despliegue;6,9
 
 [UNIDADES_ALIADOS]
 Tipo;Categoria;Reducida;Fichas_max;Fichas_escenario;Turno_entrada

@@ -463,7 +463,11 @@ export default function App() {
             losBlocked={losBlocked}
             smokeHexes={smokeHexes}
             smokeMode={smokeMode}
-            setupHighlight={phase === 'setup' ? { splitCol: setupSplitCol, side: activeSide } : null}
+            setupHighlight={phase === 'setup' && scenario ? {
+              splitCol: setupSplitCol,
+              side: activeSide,
+              maps: activeSide === 'allied' ? scenario.allied.setupMaps : scenario.axis.setupMaps,
+            } : null}
             opFireTargetHex={pendingOpFire?.enteredHexId ?? null}
             playerFaction={playerFaction}
           />

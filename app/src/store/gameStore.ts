@@ -1578,9 +1578,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Validar zona de setup
     const isAllied = activeSide === 'allied'
     const isPointyTop = scenario.orientation === 'pointy-top'
-    const validZone = isPointyTop
-      ? (isAllied ? hex.row > setupSplitCol : hex.row <= setupSplitCol)
-      : (isAllied ? hex.col <= setupSplitCol : hex.col > setupSplitCol)
+    const sideConfig = isAllied ? scenario.allied : scenario.axis
+    const validZone = sideConfig.setupMaps.length > 0
+      ? sideConfig.setupMaps.includes(hex.origMap)
+      : isPointyTop
+        ? (isAllied ? hex.row > setupSplitCol : hex.row <= setupSplitCol)
+        : (isAllied ? hex.col <= setupSplitCol : hex.col > setupSplitCol)
     if (!validZone) return { ok: false, reason: 'Fuera de tu zona de despliegue' }
 
     // Validar stacking

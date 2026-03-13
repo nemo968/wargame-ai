@@ -55,6 +55,12 @@ export function parseScenarioCSV(raw: string): Scenario {
       (sections[key] ?? []).map(r => [r[0]?.trim(), r[1]?.trim()])
     )
     const [min, max] = (d['Ops_rango'] ?? '1-2').split('-').map(Number)
+    const setupMapsRaw = d['Zona_despliegue'] ?? ''
+    const setupMaps = setupMapsRaw
+      .split(',')
+      .map(s => parseInt(s.trim()))
+      .filter(n => !isNaN(n) && n > 0)
+
     return {
       faction:       d['Faccion'] as Faction ?? 'American',
       opsRangeMin:   min ?? 1,
@@ -63,6 +69,7 @@ export function parseScenarioCSV(raw: string): Scenario {
       routEdge:      d['Ruta_huida'] ?? 'W',
       setupDesc:     (d['Despliegue_inicial'] ?? '').replace(/\\n/g, '\n'),
       altSetupDesc:  (d['Despliegue_alternativo'] ?? '').replace(/\\n/g, '\n'),
+      setupMaps,
     }
   }
 

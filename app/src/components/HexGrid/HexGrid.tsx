@@ -73,7 +73,7 @@ interface HexGridProps {
   smokeHexes?:   Record<string, 'fresh' | 'dispersed'>
   smokeMode?:    boolean
   // Setup zone highlight
-  setupHighlight?: { splitCol: number; side: 'allied' | 'axis' } | null
+  setupHighlight?: { splitCol: number; side: 'allied' | 'axis'; maps?: number[] } | null
   // Op Fire target hex
   opFireTargetHex?: string | null
   // Fog of war
@@ -285,13 +285,15 @@ export default function HexGrid({
               smokeState={smokeHexes[hex.id]}
               smokeMode={smokeMode}
               isSetupZone={setupHighlight
-                ? (orientation === 'pointy-top'
-                    ? (setupHighlight.side === 'allied'
-                        ? hex.row > setupHighlight.splitCol
-                        : hex.row <= setupHighlight.splitCol)
-                    : (setupHighlight.side === 'allied'
-                        ? hex.col <= setupHighlight.splitCol
-                        : hex.col > setupHighlight.splitCol))
+                ? setupHighlight.maps && setupHighlight.maps.length > 0
+                  ? setupHighlight.maps.includes(hex.origMap)
+                  : (orientation === 'pointy-top'
+                      ? (setupHighlight.side === 'allied'
+                          ? hex.row > setupHighlight.splitCol
+                          : hex.row <= setupHighlight.splitCol)
+                      : (setupHighlight.side === 'allied'
+                          ? hex.col <= setupHighlight.splitCol
+                          : hex.col > setupHighlight.splitCol))
                 : false}
               isOpFireTarget={hex.id === opFireTargetHex}
               playerFaction={playerFaction}
