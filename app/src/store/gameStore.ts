@@ -1579,7 +1579,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const isAllied = activeSide === 'allied'
     const isPointyTop = scenario.orientation === 'pointy-top'
     const sideConfig = isAllied ? scenario.allied : scenario.axis
-    const validZone = sideConfig.setupMaps.length > 0
+    const validZone = (sideConfig.setupMaps ?? []).length > 0
       ? sideConfig.setupMaps.includes(hex.origMap)
       : isPointyTop
         ? (isAllied ? hex.row > setupSplitCol : hex.row <= setupSplitCol)
@@ -1767,6 +1767,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (!raw) return false
       const data = JSON.parse(raw)
       if (data.version !== SAVE_VERSION) return false
+      // Migración: añadir setupMaps si falta (partidas guardadas antes de añadir Zona_despliegue)
+      if (data.scenario) {
+        data.scenario.allied.setupMaps ??= []
+        data.scenario.axis.setupMaps   ??= []
+      }
       set({
         ...data,
         selectedUnit: null, selectedHex: null, isAIThinking: false,

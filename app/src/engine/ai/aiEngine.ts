@@ -553,8 +553,12 @@ export async function runAISetup(aiSide: ActiveSide): Promise<void> {
     toPlace.sort((a, b) => priority(a) - priority(b))
 
     // Hexes válidos para la zona de la IA
+    // Usa setupMaps (Zona_despliegue) si está definido, igual que placeUnitInSetup
+    const aiSideConfig = aiSide === 'allied' ? scenario.allied : scenario.axis
+    const aiSetupMaps  = aiSideConfig.setupMaps ?? []
     const validHexes = scenario.hexes.filter(h => {
       if (h.terrain === 'RIO / CANAL') return false
+      if (aiSetupMaps.length > 0) return aiSetupMaps.includes(h.origMap)
       if (scenario.orientation === 'flat-top') {
         return aiSide === 'allied'
           ? h.col <= setupSplitCol
