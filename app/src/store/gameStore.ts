@@ -10,7 +10,7 @@ import {
   // vehicle fire
   resolveProfCheck, resolveVGunVsInfantry, resolveVGunVsVehicle,
   isInFrontArc, armorForAngle, isRearAttack as isVehicleRearAttack,
-  directionBetweenHexes, REAR_FACING, rotationSteps,
+  directionBetweenHexes, REAR_FACING, rotationSteps, hasATCover,
   airFireModifier, vgunFireModifier, computeFlankStates,
   // satw
   resolveSATWCheck, resolveSATWAttack,
@@ -182,10 +182,10 @@ export interface MoveActionResult {
   cost?:         number
   remainingMPs?: number
   reason?:       string
-  opFirePending?: boolean            // true si hay unidades elegibles para Op Fire
-  closeAssault?: CloseAssaultResult  // presente si se resolvió Close Assault vs vehículo
-  mcFailed?:     boolean             // MC falló al intentar mover
-  canRerollMC?:  boolean             // hay CP disponible para repetir el MC
+  opFirePending?:   boolean            // true si hay unidades elegibles para Op Fire
+  closeAssault?:    CloseAssaultResult  // presente si se resolvió Close Assault vs vehículo
+  mcFailed?:        boolean             // MC falló al intentar mover
+  canRerollMC?:     boolean             // hay CP disponible para repetir el MC
 }
 
 export interface FireActionResult {
@@ -228,7 +228,9 @@ interface GameStore extends GameState {
   tryRoutUnit:   (instanceId: string) => { ok: boolean; reason?: string; mustRout?: boolean; newHexId?: string; eliminated?: boolean }
   tryResolveMelee: (hexId: string, spendCPAllied?: boolean, spendCPAxis?: boolean) => { ok: boolean; reason?: string; result?: import('../engine/mechanics').MeleeGroupResult }
   endUnitActivation: (instanceId: string) => void  // Marca usada + cobra ops (sin mover/disparar)
+  markUnitOpFire:    (instanceId: string) => void  // Marca Op Fire + cobra ops (isUsed queda false)
   endSideOperations: () => void   // Pasa el control al bando contrario (o termina la fase)
+  endSideRout:       () => void   // Primer mover acabó su Rout → pasa al 2do (o avanza a Melee)
   undoLastMove: () => void        // Deshace el último movimiento de la activación actual
   undoLastFire: () => void        // Deshace el último disparo
 
@@ -295,6 +297,7 @@ const initialState: GameState = {
   secondPlayerActionPending: false,
   secondPlayerActionActive:  false,
   firstMoverSide:            null,
+  routActiveSide:            null,
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -323,8 +326,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
             hasFlank:       false,
             position:       null,
             faction,
-            facing:         null,
-            hasMoveCounter: false,
+            facing:           null,
+            hasMoveCounter:   false,
+            entryTurn:        entry.entryTurn,
+            hasFiredThisTurn: false,
           }
         }
       })
@@ -397,15 +402,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     }
 
-    // El bando que hace setup primero según scenario.setupFirst
     const setupFirstSide: ActiveSide = alliedFaction === scenario.setupFirst ? 'allied' : 'axis'
+
+    const alliedNeedsSetup = !scenario.allied.isEdgeEntry
+    const axisNeedsSetup   = !scenario.axis.isEdgeEntry
+
+    let actualSetupFirst = setupFirstSide
+    if (setupFirstSide === 'allied' && !alliedNeedsSetup) actualSetupFirst = 'axis'
+    else if (setupFirstSide === 'axis' && !axisNeedsSetup) actualSetupFirst = 'allied'
+
+    const startPhase: GamePhase  = (alliedNeedsSetup || axisNeedsSetup) ? 'setup' : 'operations'
+    const firstMover: ActiveSide = scenario.allied.faction === scenario.movesFirst ? 'allied' : 'axis'
 
     set({
       ...initialState,
       scenario,
       maxTurns:      scenario.turns,
-      phase:         'setup',
-      activeSide:    setupFirstSide,
+      phase:         startPhase,
+      activeSide:    startPhase === 'setup' ? actualSetupFirst : firstMover,
       playerFaction,
       commandPoints: {
         allied: scenario.allied.commandPoints,
@@ -477,7 +491,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
         })
       }
     } else {
-      set({ phase: PHASE_ORDER[idx + 1], unitMPs: {}, activatingUnit: null, lastMoveUndo: null, lastFireUndo: null })
+      const nextPhaseVal = PHASE_ORDER[idx + 1]
+      if (nextPhaseVal === 'rout') {
+        const { scenario } = get()
+        const firstMoverSide: ActiveSide = scenario
+          ? (scenario.movesFirst === scenario.allied.faction ? 'allied' : 'axis')
+          : 'allied'
+        set({ phase: 'rout', routActiveSide: firstMoverSide, unitMPs: {}, activatingUnit: null, lastMoveUndo: null, lastFireUndo: null })
+      } else {
+        set({ phase: nextPhaseVal, unitMPs: {}, activatingUnit: null, lastMoveUndo: null, lastFireUndo: null })
+      }
     }
   },
 
@@ -506,7 +529,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }),
 
   tryMoveUnit: (instanceId, targetHexId, skipInitialMC = false) => {
-    const { units, scenario, unitMPs, phase, activeSide, activatingUnit, pendingOpFire, movingUnitMCFailed } = get()
+    const { units, scenario, unitMPs, phase, activeSide, activatingUnit, pendingOpFire, movingUnitMCFailed, currentTurn } = get()
     const unit = units[instanceId]
     if (!unit || !scenario) return { ok: false, reason: 'Sin datos' }
     if (phase !== 'operations') return { ok: false, reason: 'Solo en Operations' }
@@ -531,6 +554,68 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const activeFaction = activeSide === 'allied' ? scenario.allied.faction : scenario.axis.faction
     if (unit.faction !== activeFaction) return { ok: false, reason: 'No es el turno de este bando' }
+
+    // ── Entrada desde fuera del tablero (refuerzos / despliegue de borde) ────────
+    if (unit.position === null) {
+      if (unit.entryTurn > currentTurn) {
+        return { ok: false, reason: `Esta unidad entra en el Turno ${unit.entryTurn}` }
+      }
+      const { setupSplitCol, axisSetupSplitCol } = get()
+      const sideConfig2  = activeSide === 'allied' ? scenario.allied : scenario.axis
+      const isAllied2    = activeSide === 'allied'
+      const isPointyTop2 = scenario.orientation === 'pointy-top'
+      const toHexEntry   = scenario.hexes.find(h => h.id === targetHexId)
+      if (!toHexEntry) return { ok: false, reason: 'Hex no encontrado' }
+
+      const inEntryZone = (sideConfig2.setupMaps ?? []).length > 0
+        ? sideConfig2.setupMaps.includes(toHexEntry.origMap)
+        : isPointyTop2
+          ? (isAllied2 ? toHexEntry.row > setupSplitCol : toHexEntry.row <= axisSetupSplitCol)
+          : (isAllied2 ? toHexEntry.col <= setupSplitCol : toHexEntry.col > axisSetupSplitCol)
+      if (!inEntryZone) return { ok: false, reason: 'Debe entrar por su zona de despliegue' }
+
+      if (!canStackInHex(targetHexId, unit.faction, units, unit.unitTypeId)) {
+        return { ok: false, reason: 'Hex lleno (máx. 2 unidades de tu bando; máx. 1 vehículo/cañón)' }
+      }
+
+      const statsEntry = getActiveInfantryStats(unit.unitTypeId, unit.isReduced)
+      if (!skipInitialMC && statsEntry) {
+        const morale    = getCurrentMorale(unit.suppression, statsEntry)
+        const mcResult  = rollMoraleCheck(morale)
+        get().addLog({ side: activeSide, message: mcLogMessage(unit, mcResult), type: 'combat' })
+        if (!mcResult.passed) {
+          const opsCostMC = getOpsCost(unit.unitTypeId)
+          set(state => ({
+            units:   { ...state.units, [instanceId]: { ...state.units[instanceId], isUsed: true } },
+            opsUsed: state.opsUsed + opsCostMC,
+            activatingUnit: null,
+          }))
+          if (get().opsUsed >= sideConfig2.opsRangeMax) get().endSideOperations()
+          return { ok: false, reason: `Falla MC (tirada ${mcResult.roll} vs Moral ${morale})` }
+        }
+      }
+
+      const opsCostEntry = getOpsCost(unit.unitTypeId)
+      const prevOpsEntry = get().opsUsed
+      const newOpsEntry  = prevOpsEntry + opsCostEntry
+      const movAllow     = movementAllowance(unit.unitTypeId)
+
+      set(state => ({
+        units:   { ...state.units, [instanceId]: { ...state.units[instanceId], position: targetHexId } },
+        unitMPs: { ...state.unitMPs, [instanceId]: movAllow },
+        opsUsed: newOpsEntry,
+        activatingUnit: instanceId,
+        lastMoveUndo: null,
+      }))
+      get().addLog({ side: activeSide,
+        message: `${unit.unitTypeId} entra al tablero en ${targetHexId} (${opsCostEntry} op)`,
+        type: 'action',
+      })
+
+      // No llamar endSideOperations aquí: la unidad acaba de entrar y su activación continúa.
+      // endUnitActivation / tryFireUnit la finalizarán y comprobarán el límite de ops.
+      return { ok: true, cost: 0, remainingMPs: movAllow }
+    }
 
     const fromHex = scenario.hexes.find(h => h.id === unit.position)
     const toHex   = scenario.hexes.find(h => h.id === targetHexId)
@@ -747,6 +832,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         targetHasMoveCounter: target.hasMoveCounter,
         targetHigher:        false,
         hindrances:          0,
+        atCover:             false,  // Aeronaves ignoran AT Cover (regla PAC)
       })
 
       if (!profAir.skipped) {
@@ -814,7 +900,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             removeUnit(targetId)
             addLog({ side: activeSide, message: `⚠ ¡SEÑUELO REVELADO! ${target.unitTypeId} era un señuelo — eliminado`, type: 'info' })
           }
-          updateUnit(attackerId, { isUsed: true, isOpFire: false })
+          updateUnit(attackerId, { isUsed: true, isOpFire: false, hasFiredThisTurn: true })
           set({ activatingUnit: null, lastMoveUndo: null })
           set({ opsUsed: prevOpsSnapshot + getOpsCost(attacker.unitTypeId) })
           const sideConfigDecAir = activeSide === 'allied' ? scenario.allied : scenario.axis
@@ -832,7 +918,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         logMsgAir = fireLogMessage(attacker, target.position ?? '?', viAirResult)
       }
 
-      updateUnit(attackerId, { isUsed: true, isOpFire: false })
+      updateUnit(attackerId, { isUsed: true, isOpFire: false, hasFiredThisTurn: true })
       set({ activatingUnit: null, lastMoveUndo: null })
       const opsCostAir2 = getOpsCost(attacker.unitTypeId)
       const newOpsAir  = prevOpsSnapshot + opsCostAir2
@@ -889,6 +975,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // firerTurnedInHex: se modela como si el facing cambió durante la activación.
       // Simplificación: si el vehículo tiene hasMoveCounter lo trató como movió, no giró.
       // Para giros in-situ (no implementados aún) se pasaría true.
+      // AT Cover: -2 Prof si el vehículo objetivo está detrás de un seto en el lado que da al atacante
+      const atCoverVal = target.faction !== attacker.faction
+        ? hasATCover(attackerHex, targetHex)
+        : false
+
       const profResult = resolveProfCheck({
         proficiency,
         rangeHexes:            range,
@@ -900,6 +991,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         targetHasMoveCounter:  target.hasMoveCounter,
         targetHigher:          targetHex.elevation > attackerHex.elevation,
         hindrances:            0,
+        atCover:               atCoverVal,
       })
 
       if (!profResult.skipped) {
@@ -964,7 +1056,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             removeUnit(targetId)
             addLog({ side: activeSide, message: `⚠ ¡SEÑUELO REVELADO! ${target.unitTypeId} era un señuelo — eliminado`, type: 'info' })
           }
-          updateUnit(attackerId, { isUsed: true, isOpFire: false })
+          updateUnit(attackerId, { isUsed: true, isOpFire: false, hasFiredThisTurn: true })
           set({ activatingUnit: null, lastMoveUndo: null })
           const opsCostDecA = hasMoved ? 0 : getOpsCost(attacker.unitTypeId)
           set({ opsUsed: prevOpsSnapshot + opsCostDecA })
@@ -983,7 +1075,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         logMsg = fireLogMessage(attacker, target.position ?? '?', viResult)
       }
 
-      updateUnit(attackerId, { isUsed: true, isOpFire: false })
+      updateUnit(attackerId, { isUsed: true, isOpFire: false, hasFiredThisTurn: true })
       set({ activatingUnit: null, lastMoveUndo: null })
       const opsCost = hasMoved ? 0 : getOpsCost(attacker.unitTypeId)
       const newOps  = prevOpsSnapshot + opsCost
@@ -1045,7 +1137,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         addLog({ side: activeSide, message: atkMsg, type: 'combat' })
       }
 
-      updateUnit(attackerId, { isUsed: true, isOpFire: false })
+      updateUnit(attackerId, { isUsed: true, isOpFire: false, hasFiredThisTurn: true })
       set({ activatingUnit: null, lastMoveUndo: null })
       const hasMoved = attackerId in unitMPs
       const opsCost  = hasMoved ? 0 : getOpsCost(attacker.unitTypeId)
@@ -1132,7 +1224,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         addLog({ side: activeSide, message: `⚠ ¡SEÑUELO REVELADO! ${target.unitTypeId} era un señuelo — eliminado`, type: 'info' })
       }
       if (attacker.isConcealed) updateUnit(attackerId, { isConcealed: false })
-      updateUnit(attackerId, { isUsed: true, isOpFire: false })
+      updateUnit(attackerId, { isUsed: true, isOpFire: false, hasFiredThisTurn: true })
       set({ activatingUnit: null, lastMoveUndo: null })
       const opsCostDec = hasMoved ? 0 : getOpsCost(attacker.unitTypeId)
       set({ opsUsed: prevOpsSnapshot + opsCostDec })
@@ -1159,7 +1251,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (attacker.isConcealed) updateUnit(attackerId, { isConcealed: false })
 
     // Mark attacker as used (reset op fire flag), clear activation state
-    updateUnit(attackerId, { isUsed: true, isOpFire: false })
+    updateUnit(attackerId, { isUsed: true, isOpFire: false, hasFiredThisTurn: true })
     set({ activatingUnit: null, lastMoveUndo: null })
 
     // Coste de ops: 1 op por activación. Si la unidad ya movió (Assault Fire),
@@ -1215,7 +1307,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     set(state => ({ smokeHexes: { ...state.smokeHexes, [targetHexId]: 'fresh' } }))
-    updateUnit(attackerId, { isUsed: true, isOpFire: false })
+    updateUnit(attackerId, { isUsed: true, isOpFire: false, hasFiredThisTurn: true })
     set({ activatingUnit: null, lastMoveUndo: null })
     const opsCost = getOpsCost(attacker.unitTypeId)
     set({ opsUsed: get().opsUsed + opsCost })
@@ -1228,11 +1320,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // ── Rout Phase ────────────────────────────────────────────────────────────
 
   tryRoutUnit: (instanceId) => {
-    const { units, scenario, phase, addLog, removeUnit, updateUnit } = get()
+    const { units, scenario, phase, routActiveSide, addLog, removeUnit, updateUnit } = get()
     const unit = units[instanceId]
     if (!unit || !scenario) return { ok: false, reason: 'Sin datos' }
     if (phase !== 'rout') return { ok: false, reason: 'Solo en Rout Phase' }
     if (!unit.position) return { ok: false, reason: 'Unidad sin posición' }
+
+    // Validar que es el turno de rout del bando correcto (primer jugador primero)
+    const unitSide: ActiveSide = unit.faction === scenario.allied.faction ? 'allied' : 'axis'
+    if (routActiveSide && unitSide !== routActiveSide) {
+      const label = routActiveSide === 'allied' ? 'Aliados' : 'Eje'
+      return { ok: false, reason: `Es el turno de Rout de ${label}` }
+    }
 
     const unitHex = scenario.hexes.find(h => h.id === unit.position)
     if (!unitHex) return { ok: false, reason: 'Hex no encontrado' }
@@ -1344,7 +1443,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   endUnitActivation: (instanceId) => {
-    const { units, scenario, unitMPs, activeSide } = get()
+    const { units, scenario, unitMPs, activeSide, currentTurn } = get()
     const unit = units[instanceId]
     if (!unit || !scenario) return
 
@@ -1375,13 +1474,73 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return
     }
 
-    // Always check auto-end after activation completes
+    // Auto-end si alcanzó el máximo O si el bando activo no tiene más unidades activables
     const sideConfig = activeSide === 'allied' ? scenario.allied : scenario.axis
-    if (get().opsUsed >= sideConfig.opsRangeMax) get().endSideOperations()
+    const currentFaction = activeSide === 'allied' ? scenario.allied.faction : scenario.axis.faction
+    const currentHasMore = Object.values(get().units).some(
+      u => u.faction === currentFaction && !u.isUsed && !u.isOpFire &&
+        (u.position !== null || (u.entryTurn !== undefined && u.entryTurn <= currentTurn))
+    )
+    if (!currentHasMore || get().opsUsed >= sideConfig.opsRangeMax) get().endSideOperations()
+  },
+
+  markUnitOpFire: (instanceId) => {
+    const { units, scenario, unitMPs, activeSide, currentTurn } = get()
+    const unit = units[instanceId]
+    if (!unit || !scenario) return
+    // Una unidad que ya se movió este turno no puede marcarse Op Fire
+    if (instanceId in unitMPs) return
+
+    // Marca Op Fire (isUsed se mantiene false — la unidad puede hacer Final Op Fire)
+    get().updateUnit(instanceId, { isOpFire: true })
+    set({ activatingUnit: null, lastMoveUndo: null })
+
+    // Cobra ops
+    const opsCost = getOpsCost(unit.unitTypeId)
+    set({ opsUsed: get().opsUsed + opsCost })
+
+    // Concealment gain: fuera de LOS enemiga → gana ocultamiento (Regla 15.0)
+    {
+      const freshState = get()
+      const hex = scenario.hexes.find(h => h.id === unit.position)
+      if (hex && !unit.isConcealed && hasBeneficialTerrain(hex) &&
+          isOutsideAllEnemyLOS(instanceId, freshState.units, scenario.hexes, freshState.smokeHexes)) {
+        get().updateUnit(instanceId, { isConcealed: true })
+      }
+    }
+
+    // Auto-end si alcanzó el máximo O si el bando activo no tiene más unidades activables
+    const sideConfig = activeSide === 'allied' ? scenario.allied : scenario.axis
+    const currentFaction = activeSide === 'allied' ? scenario.allied.faction : scenario.axis.faction
+    const currentHasMore = Object.values(get().units).some(
+      u => u.faction === currentFaction && !u.isUsed && !u.isOpFire &&
+        (u.position !== null || (u.entryTurn !== undefined && u.entryTurn <= currentTurn))
+    )
+    if (!currentHasMore || get().opsUsed >= sideConfig.opsRangeMax) get().endSideOperations()
+  },
+
+  endSideRout: () => {
+    const { routActiveSide, firstMoverSide, scenario, activeSide } = get()
+    if (!scenario || !routActiveSide) return
+
+    const firstMover: ActiveSide = firstMoverSide ?? (scenario.movesFirst === scenario.allied.faction ? 'allied' : 'axis')
+    const secondMover: ActiveSide = firstMover === 'allied' ? 'axis' : 'allied'
+    const sideLabel = routActiveSide === 'allied' ? 'Aliados' : 'Eje'
+
+    get().addLog({ side: routActiveSide, message: `${sideLabel} completan Rout Phase`, type: 'phase' })
+
+    if (routActiveSide === secondMover) {
+      // Ambos bandos han resuelto su Rout → avanzar a Melee
+      get().addLog({ side: activeSide, message: 'Fase de Huida concluida → Fase de Melé', type: 'phase' })
+      set({ phase: 'melee', routActiveSide: null })
+    } else {
+      // El primer jugador acabó → turno del segundo jugador
+      set({ routActiveSide: secondMover })
+    }
   },
 
   endSideOperations: () => {
-    const { activeSide, scenario, units, opsUsed } = get()
+    const { activeSide, scenario, units, opsUsed, currentTurn } = get()
     if (!scenario) return
 
     const sideLabel = activeSide === 'allied' ? 'Aliados' : 'Eje'
@@ -1394,16 +1553,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const nextSide: ActiveSide = activeSide === 'allied' ? 'axis' : 'allied'
     const nextFaction = nextSide === 'allied' ? scenario.allied.faction : scenario.axis.faction
 
-    // Comprobar si quedan unidades sin activar en algún bando
-    const nextHasUnits = Object.values(units).some(
-      u => u.faction === nextFaction && !u.isUsed && u.position !== null
-    )
-    const allDone = !Object.values(units).some(u => !u.isUsed && u.position !== null)
+    // Una unidad está "activada" si está Usada O está en Op Fire (regla: Op Fire consume el range).
+    const isActivated = (u: UnitInstance) => u.isUsed || u.isOpFire
+    const isAvailable = (u: UnitInstance) =>
+      !isActivated(u) && (u.position !== null || (u.entryTurn !== undefined && u.entryTurn <= currentTurn))
+
+    const nextHasUnits = Object.values(units).some(u => u.faction === nextFaction && isAvailable(u))
+    const allDone      = !Object.values(units).some(u => isAvailable(u))
+
+    const firstMoverSide: ActiveSide = scenario.movesFirst === scenario.allied.faction ? 'allied' : 'axis'
 
     if (allDone || !nextHasUnits) {
-      // Si nadie más puede activarse → termina la fase de Operaciones
+      // Si nadie más puede activarse → termina la fase de Operaciones, empieza Rout Phase
       get().addLog({ side: activeSide, message: 'Fase de Operaciones concluida', type: 'phase' })
-      set({ phase: 'rout', opsUsed: 0, unitMPs: {}, selectedUnit: null, selectedHex: null, activatingUnit: null, lastMoveUndo: null, lastFireUndo: null })
+      set({ phase: 'rout', routActiveSide: firstMoverSide, opsUsed: 0, unitMPs: {}, selectedUnit: null, selectedHex: null, activatingUnit: null, lastMoveUndo: null, lastFireUndo: null })
       return
     }
 
@@ -1567,8 +1730,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     }
 
-    // El firer pierde concealment, queda Used
-    get().updateUnit(firerId, { isUsed: true, isOpFire: false, isConcealed: false })
+    // El firer pierde concealment, queda Used y marcado como que ya disparó este turno
+    get().updateUnit(firerId, { isUsed: true, isOpFire: false, isConcealed: false, hasFiredThisTurn: true })
 
     get().addLog({ side: opFireSide, message: opFireLogMessage(firer, targetId, result, isFinal), type: 'combat' })
 
@@ -1654,9 +1817,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const otherHasUnits = Object.values(allUnits).some(u => u.faction === otherFaction && u.position !== null)
 
     if (!otherHasUnits) {
-      // El otro bando todavía no ha colocado → pasarle el turno de setup
-      set({ activeSide: otherSide })
-      get().addLog({ side: activeSide, message: `${activeSide === 'allied' ? 'Aliados' : 'Eje'} han completado su despliegue. Turno del ${otherSide === 'allied' ? 'Aliados' : 'Eje'}.`, type: 'phase' })
+      const otherSideConfig = otherSide === 'allied' ? scenario.allied : scenario.axis
+      if (otherSideConfig.isEdgeEntry) {
+        const firstSide: ActiveSide = scenario.allied.faction === scenario.movesFirst ? 'allied' : 'axis'
+        set({
+          phase:      'operations',
+          activeSide: firstSide,
+          opsUsed:    0,
+          unitMPs:    {},
+        })
+        get().addLog({ side: activeSide, message: 'Despliegue completado. ¡Comienza la batalla! (El otro bando entrará durante operaciones)', type: 'phase' })
+      } else {
+        set({ activeSide: otherSide })
+        get().addLog({ side: activeSide, message: `${activeSide === 'allied' ? 'Aliados' : 'Eje'} han completado su despliegue. Turno del ${otherSide === 'allied' ? 'Aliados' : 'Eje'}.`, type: 'phase' })
+      }
     } else {
       // Ambos bandos han colocado → iniciar operaciones
       const firstSide: ActiveSide = scenario.allied.faction === scenario.movesFirst ? 'allied' : 'axis'
@@ -1796,8 +1970,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (data.version !== SAVE_VERSION) return false
       // Migración: añadir setupMaps si falta (partidas guardadas antes de añadir Zona_despliegue)
       if (data.scenario) {
-        data.scenario.allied.setupMaps ??= []
-        data.scenario.axis.setupMaps   ??= []
+        data.scenario.allied.setupMaps  ??= []
+        data.scenario.axis.setupMaps    ??= []
+        data.scenario.allied.isEdgeEntry ??= false
+        data.scenario.axis.isEdgeEntry   ??= false
+      }
+      // Migración: añadir entryTurn a unidades que no lo tengan
+      if (data.units) {
+        for (const u of Object.values(data.units) as Record<string, unknown>[]) {
+          if ((u as Record<string, unknown>).entryTurn === undefined) {
+            (u as Record<string, unknown>).entryTurn = 1
+          }
+          if ((u as Record<string, unknown>).hasFiredThisTurn === undefined) {
+            (u as Record<string, unknown>).hasFiredThisTurn = false
+          }
+          delete (u as Record<string, unknown>).isDeploying
+        }
       }
       set({
         ...data,

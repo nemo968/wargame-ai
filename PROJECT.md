@@ -1,6 +1,6 @@
 # Band of Brothers: Screaming Eagles — Proyecto Digital
 
-**Última actualización:** 2026-03-12
+**Última actualización:** 2026-03-14
 
 Adaptación digital del juego de mesa **Band of Brothers: Screaming Eagles v2.3** (wargame táctico WWII, tablero hexagonal). La implementación sigue las reglas del juego de mesa fielmente.
 
@@ -164,6 +164,22 @@ Referencias completas: `docs/Reglamento.pdf` (pp. 1–9) y `docs/Hoja de ayuda.p
 | 02 | So few led by so many | 7 |
 
 > El Escenario 02 está disponible y figura en `scenarios.json`.
+
+---
+
+## Correcciones recientes (2026-03-14)
+
+| Área | Cambio |
+|------|--------|
+| `vehicleFire.ts` | AT Cover (-2 Prof): `atCover` en `ProfCheckParams`, helper `hasATCover()` |
+| `gameStore.ts` | Nueva acción `markUnitOpFire()` — cobra ops + concealment + auto-end |
+| `gameStore.ts` | Nueva acción `endSideRout()` — secuencia primer/segundo jugador en Rout Phase |
+| `gameStore.ts` | `endSideOperations`: `isActivated = isUsed \|\| isOpFire`; `routActiveSide` al entrar en Rout |
+| `gameStore.ts` | `endUnitActivation`: auto-end si no quedan unidades activables aunque `opsUsed < opsMin` |
+| `types/index.ts` | `routActiveSide: ActiveSide \| null` en `GameState` |
+| `PhaseBar.tsx` | Botón "FIN ROUT ▶" + indicador de bando activo en Rout Phase |
+| `App.tsx` | `handleOpFire` usa `markUnitOpFire` en vez de `updateUnit` directo |
+| `aiEngine.ts` | `opfire_mark` usa `markUnitOpFire` (corregía bug: borraba el marcador Op Fire) |
 
 ---
 

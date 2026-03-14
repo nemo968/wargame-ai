@@ -11,9 +11,11 @@ interface PhaseBarProps {
   opsMax:           number
   commandPoints:    Record<ActiveSide, number>
   isAIThinking:     boolean
+  routActiveSide:   ActiveSide | null
   onNextPhase:      () => void
   onEndTurn:        () => void
   onEndSideOps:     () => void
+  onEndSideRout:    () => void
   onSave:           () => void
   onLoad:           () => void
 }
@@ -29,7 +31,8 @@ export default function PhaseBar({
   currentTurn, maxTurns, phase, activeSide,
   opsUsed, opsMin, opsMax,
   commandPoints, isAIThinking,
-  onNextPhase, onEndSideOps, onSave, onLoad,
+  routActiveSide,
+  onNextPhase, onEndSideOps, onEndSideRout, onSave, onLoad,
 }: PhaseBarProps) {
   const sideLabel = activeSide === 'allied' ? 'ALIADOS' : 'EJE'
   const sideColor = activeSide === 'allied' ? '#4a7c59' : '#6b7355'
@@ -165,8 +168,25 @@ export default function PhaseBar({
         </div>
       )}
 
-      {/* Botón siguiente fase (no durante Operations, lo gestiona FIN OPS) */}
-      {phase !== 'setup' && phase !== 'end' && phase !== 'operations' && !isAIThinking && (
+      {/* Rout Phase: muestra bando activo y botón FIN ROUT */}
+      {phase === 'rout' && !isAIThinking && (
+        <div className="flex items-center gap-3">
+          {routActiveSide && (
+            <span className="text-xs text-amber font-bold tracking-wider">
+              ROUT: {routActiveSide === 'allied' ? 'ALIADOS' : 'EJE'}
+            </span>
+          )}
+          <button
+            onClick={onEndSideRout}
+            className="px-3 py-1 text-xs font-bold tracking-widest rounded border bg-brass text-app-bg border-brass hover:bg-brass/80"
+          >
+            FIN ROUT ▶
+          </button>
+        </div>
+      )}
+
+      {/* Botón siguiente fase (no durante Operations ni Rout, lo gestionan FIN OPS / FIN ROUT) */}
+      {phase !== 'setup' && phase !== 'end' && phase !== 'operations' && phase !== 'rout' && !isAIThinking && (
         <button
           onClick={onNextPhase}
           className="btn-military px-4 py-1 text-xs tracking-widest"

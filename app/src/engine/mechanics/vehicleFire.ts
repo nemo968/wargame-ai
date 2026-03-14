@@ -134,6 +134,26 @@ export function armorForAngle(
   return vStats.armorSide
 }
 
+// ─── AT Cover ─────────────────────────────────────────────────────────────────
+
+/**
+ * Determina si el vehículo objetivo tiene "AT Cover" respecto al atacante.
+ * PAC: -2 Prof cuando el vehículo está directamente detrás de un Muro o Dike Road.
+ * En este modelo de datos, los setos (bocage) en el lado del hex que da al atacante
+ * equivalen al AT Cover de la PAC para los escenarios de Screaming Eagles.
+ *
+ * @param attackerHex  Hex del atacante
+ * @param targetHex    Hex del vehículo objetivo
+ */
+export function hasATCover(attackerHex: HexData, targetHex: HexData): boolean {
+  const dir = directionBetweenHexes(attackerHex, targetHex)
+  if (!dir) return false   // No adyacentes → sin AT cover directional
+  // El lado del hex objetivo que da al atacante es la dirección opuesta
+  const oppDir = REAR_FACING[dir as HexSideFlat]
+  // Hay seto en el lado del objetivo que mira al atacante → AT Cover
+  return targetHex.sides[oppDir] === true
+}
+
 // ─── Prof Check ───────────────────────────────────────────────────────────────
 
 export interface ProfCheckParams {
@@ -157,6 +177,9 @@ export interface ProfCheckParams {
   targetHigher:        boolean
   /** Número de hindrances en la LOS → -1 por hindrance. */
   hindrances:          number
+  /** True si el vehículo objetivo está detrás de un seto/muro en el lado que da al atacante → -2.
+   *  PAC: "AT Cover: -2 when target vehicle is directly behind a Wall or Dike Road side". */
+  atCover:             boolean
 }
 
 export interface ProfCheckResult {
@@ -219,6 +242,7 @@ export function resolveProfCheck(p: ProfCheckParams): ProfCheckResult {
   if (p.targetHasMoveCounter) mods.push({ label: 'Move counter (objetivo)', value: -1 })
   if (p.targetHigher)         mods.push({ label: 'Objetivo más alto',        value: -1 })
   for (let i = 0; i < p.hindrances; i++) mods.push({ label: 'Hindrance',    value: -1 })
+  if (p.atCover)              mods.push({ label: 'AT Cover (seto/muro)',     value: -2 })
 
   const needed = p.proficiency + mods.reduce((s, m) => s + m.value, 0)
 

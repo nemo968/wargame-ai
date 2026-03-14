@@ -340,8 +340,10 @@ function getBestAction(
   const aiFaction = aiSide === 'allied' ? scenario.allied.faction : scenario.axis.faction
   const actions: ScoredAction[] = []
 
+  const { currentTurn } = state
   const availableUnits = Object.values(units).filter(u =>
-    u.faction === aiFaction && !u.isUsed && !u.isOpFire && u.position !== null
+    u.faction === aiFaction && !u.isUsed && !u.isOpFire &&
+    (u.position !== null || (u.entryTurn !== undefined && u.entryTurn <= currentTurn))
   )
 
   const visibleEnemies = Object.values(units).filter(
@@ -349,11 +351,33 @@ function getBestAction(
   )
 
   for (const unit of availableUnits) {
-    const unitHex = scenario.hexes.find(h => h.id === unit.position)
-    if (!unitHex) continue
-
     const cat = getUnitType(unit.unitTypeId)?.category ?? 'squad'
     if (cat === 'decoy') continue  // Los decoys no actúan
+
+    // Off-board units: find best entry hex in setup zone
+    if (unit.position === null) {
+      const { setupSplitCol, axisSetupSplitCol } = state
+      const isAllied = aiSide === 'allied'
+      const isPointyTop = scenario.orientation === 'pointy-top'
+      const sideConfig = isAllied ? scenario.allied : scenario.axis
+      const entryHexes = scenario.hexes.filter(h => {
+        if ((sideConfig.setupMaps ?? []).length > 0) return sideConfig.setupMaps.includes(h.origMap)
+        return isPointyTop
+          ? (isAllied ? h.row > setupSplitCol : h.row <= axisSetupSplitCol)
+          : (isAllied ? h.col <= setupSplitCol : h.col > axisSetupSplitCol)
+      }).filter(h => canStackInHex(h.id, unit.faction, units, unit.unitTypeId))
+      if (entryHexes.length > 0) {
+        const bestEntry = entryHexes.reduce((best, h) => {
+          const d = distToClosestObjective(h, objectives, scenario)
+          return d < distToClosestObjective(best, objectives, scenario) ? h : best
+        })
+        actions.push({ type: 'move', score: 3, unitId: unit.instanceId, targetHexId: bestEntry.id })
+      }
+      continue
+    }
+
+    const unitHex = scenario.hexes.find(h => h.id === unit.position)
+    if (!unitHex) continue
 
     // ── Opciones de fuego ──────────────────────────────────────────────────
     for (const target of visibleEnemies) {
@@ -517,8 +541,7 @@ async function executeAction(
       break
     }
     case 'opfire_mark': {
-      gs().updateUnit(action.unitId, { isOpFire: true })
-      gs().endUnitActivation(action.unitId)
+      gs().markUnitOpFire(action.unitId)
       break
     }
   }

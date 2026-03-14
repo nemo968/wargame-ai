@@ -113,6 +113,20 @@
 
 ---
 
+## ✅ Correcciones de reglas (2026-03-14)
+
+- [x] **AT Cover en Prof Check** — `vehicleFire.ts`: añadido parámetro `atCover: boolean` a `ProfCheckParams` (-2 Proficiency cuando el vehículo objetivo está detrás de un seto/muro en el lado que da al atacante). Helper `hasATCover()` exportado. Aeronaves ignoran esta regla (`atCover: false`). Verificado con NotebookLM.
+
+- [x] **Bug: Op Fire no cobraba Operations Range** — `markUnitOpFire()` nueva acción en store. Reemplaza llamada directa a `updateUnit` en `App.tsx` y AI engine (`aiEngine.ts`). Cobra ops, gana concealment si aplica, auto-llama `endSideOperations`.
+
+- [x] **Bug: `allDone`/`nextHasUnits` ignoraban unidades Op Fire** — `endSideOperations` ahora usa `isActivated = u.isUsed || u.isOpFire`. La fase de Operaciones termina correctamente aunque queden unidades marcadas en Op Fire.
+
+- [x] **Bug: Rout Phase sin orden de bandos** — Añadido `routActiveSide: ActiveSide | null` a `GameState`. El primer jugador (movesFirst) resuelve todo su Rout antes que el segundo. `tryRoutUnit()` valida el bando activo. Nuevo botón "FIN ROUT ▶" en `PhaseBar`. Nueva acción `endSideRout()` en store.
+
+- [x] **Bug: FIN OPS bloqueado si unidades < opsMin** — `endUnitActivation` y `markUnitOpFire` auto-llaman `endSideOperations` cuando el bando activo no tiene más unidades activables, aunque `opsUsed < opsMin`.
+
+---
+
 ## 📋 Notas de diseño
 
 - **Política de cambios**: modificar solo lo necesario para la tarea. Sin refactorizaciones preventivas.

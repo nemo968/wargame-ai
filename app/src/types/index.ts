@@ -104,8 +104,10 @@ export interface UnitInstance {
   hasFlank:    boolean
   position:    string | null  // hexId o null (off-board)
   faction:     Faction
-  facing:          HexSideFlat | null  // dirección del arco frontal (vehículos/cañones)
-  hasMoveCounter:  boolean             // vehículo movió este turno → atacantes necesitan Prof Check -1
+  facing:           HexSideFlat | null  // dirección del arco frontal (vehículos/cañones)
+  hasMoveCounter:   boolean             // vehículo movió este turno → atacantes necesitan Prof Check -1
+  entryTurn:        number              // turno en que la unidad puede entrar al tablero (1 = desde el inicio)
+  hasFiredThisTurn: boolean             // disparó en este turno → no puede volver a disparar (ni Op Fire)
 }
 
 // ─── Escenario ───────────────────────────────────────────────────────────────
@@ -122,6 +124,7 @@ export interface SideConfig {
   setupDesc:    string
   altSetupDesc: string
   setupMaps:    number[]      // tableros válidos para el despliegue inicial (vacío = usar splitCol)
+  isEdgeEntry:  boolean       // true si el despliegue es "entrar por borde en turno X" (gratuito)
 }
 
 export interface ScenarioUnitEntry {
@@ -210,6 +213,8 @@ export interface GameState {
   secondPlayerActionPending: boolean             // 2do jugador decidiendo si usar acción bonus (CP)
   secondPlayerActionActive:  boolean             // 2do jugador realizando su acción bonus
   firstMoverSide:            ActiveSide | null   // bando que mueve primero en este turno
+  // ── Rout Phase ─────────────────────────────────────────────────────────────
+  routActiveSide:            ActiveSide | null   // bando que está resolviendo su Rout Phase ahora
 }
 
 export interface LogEntry {

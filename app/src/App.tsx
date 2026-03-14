@@ -25,11 +25,11 @@ export default function App() {
     log, isAIThinking,
     activatingUnit, lastMoveUndo, lastFireUndo,
     pendingOpFire, setupSplitCol, axisSetupSplitCol,
-    secondPlayerActionPending, secondPlayerActionActive, firstMoverSide,
+    secondPlayerActionPending, secondPlayerActionActive, firstMoverSide, routActiveSide,
     loadScenario, selectUnit, selectHex,
     nextPhase, updateUnit,
     tryMoveUnit, tryFireUnit, tryFireSmoke, tryRoutUnit, tryResolveMelee, addLog,
-    endUnitActivation, endSideOperations, undoLastMove, undoLastFire,
+    endUnitActivation, markUnitOpFire, endSideOperations, endSideRout, undoLastMove, undoLastFire,
     tryOpFireUnit, passOpFire,
     placeUnitInSetup, removeUnitFromSetup, completeSetup,
     spendCPForMovement, confirmMCRerollAndMove, declineMCReroll,
@@ -337,8 +337,8 @@ export default function App() {
       setActionMsg('No se puede marcar Op Fire: la unidad ya se ha movido')
       return
     }
-    updateUnit(id, { isOpFire: true, isUsed: false })
-  }, [unitMPs, updateUnit])
+    markUnitOpFire(id)
+  }, [unitMPs, markUnitOpFire])
 
   const handleMarkUsed = useCallback((id: string) => {
     endUnitActivation(id)
@@ -394,9 +394,17 @@ export default function App() {
     : null
 
   const offBoardUnits = useMemo(() => {
-    if (phase !== 'setup' || !activeFaction) return []
-    return Object.values(units).filter(u => u.faction === activeFaction && u.position === null)
-  }, [phase, activeFaction, units])
+    if (!activeFaction) return []
+    if (phase === 'setup') {
+      return Object.values(units).filter(u => u.faction === activeFaction && u.position === null)
+    }
+    if (phase === 'operations') {
+      return Object.values(units).filter(
+        u => u.faction === activeFaction && u.position === null && u.entryTurn <= currentTurn
+      )
+    }
+    return []
+  }, [phase, activeFaction, units, currentTurn])
 
   const unitTypes = useMemo(() => {
     const map: Record<string, { name: string; faction: string; category: string }> = {}
@@ -437,9 +445,11 @@ export default function App() {
         opsMax={activeSideConfig?.opsRangeMax ?? 2}
         commandPoints={commandPoints}
         isAIThinking={isAIThinking}
+        routActiveSide={routActiveSide}
         onNextPhase={nextPhase}
         onEndTurn={nextPhase}
         onEndSideOps={endSideOperations}
+        onEndSideRout={endSideRout}
         onSave={handleSave}
         onLoad={handleLoad}
       />
@@ -463,7 +473,10 @@ export default function App() {
             losBlocked={losBlocked}
             smokeHexes={smokeHexes}
             smokeMode={smokeMode}
-            setupHighlight={phase === 'setup' && scenario ? {
+            setupHighlight={scenario && (
+              phase === 'setup' ||
+              (phase === 'operations' && selectedUnit != null && units[selectedUnit]?.position === null)
+            ) ? {
               splitCol: setupSplitCol,
               axisSetupSplitCol,
               side: activeSide,
