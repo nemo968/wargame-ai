@@ -61,15 +61,20 @@ export function parseScenarioCSV(raw: string): Scenario {
       .map(s => parseInt(s.trim()))
       .filter(n => !isNaN(n) && n > 0)
 
+    const setupDescRaw = (d['Despliegue_inicial'] ?? '').replace(/\\n/g, '\n')
+    // Si el despliegue empieza por "Turn X:" el bando entra por borde durante operaciones (gratuito)
+    const isEdgeEntry = /^\s*turn\s+\d+/i.test(setupDescRaw)
+
     return {
       faction:       d['Faccion'] as Faction ?? 'American',
       opsRangeMin:   min ?? 1,
       opsRangeMax:   max ?? 2,
       commandPoints: parseInt(d['Puntos_comando'] ?? '1'),
       routEdge:      d['Ruta_huida'] ?? 'W',
-      setupDesc:     (d['Despliegue_inicial'] ?? '').replace(/\\n/g, '\n'),
+      setupDesc:     setupDescRaw,
       altSetupDesc:  (d['Despliegue_alternativo'] ?? '').replace(/\\n/g, '\n'),
       setupMaps,
+      isEdgeEntry,
     }
   }
 

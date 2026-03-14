@@ -330,6 +330,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             hasMoveCounter:   false,
             entryTurn:        entry.entryTurn,
             hasFiredThisTurn: false,
+            hasCPToken:       false,
           }
         }
       })
@@ -948,10 +949,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (losResult.blocked) return { ok: false, reason: 'Sin LOS al objetivo' }
     const hindrances = losResult.hindrance
 
-    // CP spending: solo si tiene CPs disponibles y lo solicita
-    const spendCP = spendCPArg && commandPoints[activeSide] > 0
-    if (spendCP) get().useCommandPoint(activeSide)
-
     const attackerType = getUnitType(attacker.unitTypeId)
     const targetType   = getUnitType(target.unitTypeId)
     if (!attackerType || !targetType) return { ok: false, reason: 'Tipo de unidad desconocido' }
@@ -1165,6 +1162,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const maxRange = attackerStats.rangeMax ?? Infinity
     if (range > maxRange * 2) return { ok: false, reason: `Fuera de rango (máx ${maxRange * 2} hexes)` }
+
+    // CP spending: solo infantería, solo si no gastó ya CP esta unidad este turno
+    const spendCP = spendCPArg && commandPoints[activeSide] > 0 && !attacker.hasCPToken
+    if (spendCP) {
+      get().useCommandPoint(activeSide)
+      get().updateUnit(attackerId, { hasCPToken: true })
+    }
 
     // Auto-determinar modo de fuego según el estado de la unidad (Regla 6.0)
     const hasMoved = attackerId in unitMPs
@@ -1407,13 +1411,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const sideB = Object.values(freshUnits).filter(u => u.position === hexId && u.faction === axisFaction)
     if (sideA.length === 0 || sideB.length === 0) return { ok: false, reason: 'No hay combate en este hex' }
 
-    const toParticipants = (side: UnitInstance[], useCP: boolean): MeleeParticipant[] =>
-      side.flatMap(u => {
+    // CP se aplica solo a la primera unidad del bando (regla 12.0: máx 1 CP por bando por Melee)
+    const toParticipants = (side: UnitInstance[], useCP: boolean): MeleeParticipant[] => {
+      let cpUsed = false
+      return side.flatMap(u => {
         const ut    = getUnitType(u.unitTypeId)
         const stats = getActiveInfantryStats(u.unitTypeId, u.isReduced)
         if (!stats) return []
-        return [{ unit: u, category: ut?.category ?? 'squad', stats, hasFlank: u.hasFlank, useCP }]
+        const applyCP = useCP && !cpUsed
+        if (applyCP) cpUsed = true
+        return [{ unit: u, category: ut?.category ?? 'squad', stats, hasFlank: u.hasFlank, useCP: applyCP }]
       })
+    }
 
     const result = resolveMelee(
       toParticipants(sideA, spendCPAllied),
@@ -1870,8 +1879,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return { ok: false, reason: 'Solo infantería desmontada (regla 3.0)' }
     }
     if (commandPoints[activeSide] <= 0) return { ok: false, reason: 'Sin CPs disponibles' }
+    if (unit.hasCPToken) return { ok: false, reason: 'Esta unidad ya usó un CP este turno' }
 
     get().useCommandPoint(activeSide)
+    get().updateUnit(instanceId, { hasCPToken: true })
     const currentMPs = get().unitMPs[instanceId] ?? 0
     set(state => ({ unitMPs: { ...state.unitMPs, [instanceId]: currentMPs + 1 } }))
     get().addLog({ side: activeSide, message: `${unit.unitTypeId} usa CP: +1 MP (Follow Me!)`, type: 'info' })
@@ -1885,8 +1896,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const unit = units[instanceId]
     if (!unit || !scenario) return { ok: false, reason: 'Sin datos' }
     if (commandPoints[activeSide] <= 0) return { ok: false, reason: 'Sin CPs' }
+    if (unit.hasCPToken) return { ok: false, reason: 'Esta unidad ya usó un CP este turno' }
 
     get().useCommandPoint(activeSide)
+    get().updateUnit(instanceId, { hasCPToken: true })
 
     // Re-roll MC
     const stats = getActiveInfantryStats(unit.unitTypeId, unit.isReduced)

@@ -91,12 +91,8 @@ export function rollMeleeDice(
 
   let rolls = [rollD10(), rollD10()]
   if (useCP) {
-    // CP: re-tira ambos dados (el jugador puede elegir el mejor resultado)
-    // Implementación: tiramos otros 2 dados y el motor elige el más favorable
-    const rerolled = [rollD10(), rollD10()]
-    const hitsOriginal = rolls.filter(r => r <= meleeFP).length
-    const hitsRerolled = rerolled.filter(r => r <= meleeFP).length
-    rolls = hitsRerolled >= hitsOriginal ? rerolled : rolls
+    // CP: re-tira ambos dados y usa el resultado de la re-tirada (no elige el mejor)
+    rolls = [rollD10(), rollD10()]
   }
 
   const hits = rolls.filter(r => r <= meleeFP).length

@@ -125,6 +125,12 @@
 
 - [x] **Bug: FIN OPS bloqueado si unidades < opsMin** — `endUnitActivation` y `markUnitOpFire` auto-llaman `endSideOperations` cuando el bando activo no tiene más unidades activables, aunque `opsUsed < opsMin`.
 
+- [x] **Bugs CP (Command Points) — 4 correcciones** — Verificado con NotebookLM:
+  1. **Límite 1 CP/unidad/turno**: añadido `hasCPToken: boolean` a `UnitInstance`. Se marca `true` al gastar el primer CP; se limpia en Recovery. Chequeado en `spendCPForMovement`, `confirmMCRerollAndMove` y fuego de infantería (`tryFireUnit`).
+  2. **CP ignorado en vehículos/cañones**: eliminado el `useCommandPoint` anticipado en `tryFireUnit`; el CP solo se consume en la ruta de infantería (Ruta C). Los vehículos/cañones ya no pueden gastar CP en fuego.
+  3. **Melee re-tirada elige el mejor resultado** (bug): `rollMeleeDice` en `melee.ts` ahora usa el resultado de la re-tirada directamente (no best-of-two).
+  4. **CP de Melee aplicado a todas las unidades** (bug): `toParticipants` en `tryResolveMelee` ahora aplica `useCP: true` solo a la primera unidad del bando (máx 1 CP por bando por Melee, regla 12.0).
+
 ---
 
 ## 📋 Notas de diseño

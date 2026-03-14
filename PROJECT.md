@@ -176,10 +176,13 @@ Referencias completas: `docs/Reglamento.pdf` (pp. 1–9) y `docs/Hoja de ayuda.p
 | `gameStore.ts` | Nueva acción `endSideRout()` — secuencia primer/segundo jugador en Rout Phase |
 | `gameStore.ts` | `endSideOperations`: `isActivated = isUsed \|\| isOpFire`; `routActiveSide` al entrar en Rout |
 | `gameStore.ts` | `endUnitActivation`: auto-end si no quedan unidades activables aunque `opsUsed < opsMin` |
-| `types/index.ts` | `routActiveSide: ActiveSide \| null` en `GameState` |
+| `types/index.ts` | `routActiveSide: ActiveSide \| null` en `GameState`; `hasCPToken: boolean` en `UnitInstance` |
 | `PhaseBar.tsx` | Botón "FIN ROUT ▶" + indicador de bando activo en Rout Phase |
 | `App.tsx` | `handleOpFire` usa `markUnitOpFire` en vez de `updateUnit` directo |
 | `aiEngine.ts` | `opfire_mark` usa `markUnitOpFire` (corregía bug: borraba el marcador Op Fire) |
+| `melee.ts` | Re-tirada CP usa resultado re-tirado (no best-of-two) |
+| `recovery.ts` | Limpia `hasCPToken: false` en Recovery Phase |
+| `gameStore.ts` | CP solo para infantería en `tryFireUnit`; `hasCPToken` guard en `spendCPForMovement`, `confirmMCRerollAndMove`; CP en Melee solo primera unidad por bando |
 
 ---
 

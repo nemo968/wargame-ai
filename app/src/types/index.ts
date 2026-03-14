@@ -108,6 +108,7 @@ export interface UnitInstance {
   hasMoveCounter:   boolean             // vehículo movió este turno → atacantes necesitan Prof Check -1
   entryTurn:        number              // turno en que la unidad puede entrar al tablero (1 = desde el inicio)
   hasFiredThisTurn: boolean             // disparó en este turno → no puede volver a disparar (ni Op Fire)
+  hasCPToken:       boolean             // ya se gastó 1 CP en esta unidad este turno (máx 1 CP/unidad/turno)
 }
 
 // ─── Escenario ───────────────────────────────────────────────────────────────

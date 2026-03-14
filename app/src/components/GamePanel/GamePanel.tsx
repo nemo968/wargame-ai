@@ -84,13 +84,14 @@ export default function GamePanel({
             )}
 
             {/* ── SETUP PANEL ───────────────────────────────────────────── */}
-            {phase === 'setup' ? (
+            {/* During operations, if a unit is being activated (just placed on board), show UnitInfo */}
+            {(phase === 'setup' || (phase === 'operations' && offBoardUnits.length > 0 && !activatingUnit)) ? (
               <SetupPanel
                 offBoardUnits={offBoardUnits}
                 selectedUnitId={selectedUnit?.instanceId ?? null}
                 activeSide={activeSide}
                 onSelectUnit={onSelectUnit}
-                onCompleteSetup={onCompleteSetup}
+                onCompleteSetup={phase === 'setup' ? onCompleteSetup : undefined}
               />
             ) : selectedUnit ? (
               <UnitInfo unit={selectedUnit} typeName={unitTypeName}
@@ -531,12 +532,14 @@ function SetupPanel({
         </div>
       )}
 
-      <button
-        onClick={onCompleteSetup}
-        className="w-full py-2 bg-brass text-app-bg font-bold tracking-widest text-xs rounded hover:bg-brass/90"
-      >
-        COMPLETAR DESPLIEGUE ▶
-      </button>
+      {onCompleteSetup && (
+        <button
+          onClick={onCompleteSetup}
+          className="w-full py-2 bg-brass text-app-bg font-bold tracking-widest text-xs rounded hover:bg-brass/90"
+        >
+          COMPLETAR DESPLIEGUE ▶
+        </button>
+      )}
     </div>
   )
 }

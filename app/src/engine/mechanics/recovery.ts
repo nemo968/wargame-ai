@@ -64,9 +64,11 @@ export function applyRecovery(
       // Recuperar supresión (excepto si en Melee)
       suppression: inMelee ? unit.suppression : recoverSuppression(unit.suppression),
       // Limpiar counters tácticos
-      isUsed:    false,
-      isOpFire:  false,
-      hasFlank:  false,
+      isUsed:           false,
+      isOpFire:         false,
+      hasFlank:         false,
+      hasFiredThisTurn: false,
+      hasCPToken:       false,
       // isConcealed se mantiene (la ocultación no se pierde en Recovery)
       // position, isReduced, faction no cambian
     }

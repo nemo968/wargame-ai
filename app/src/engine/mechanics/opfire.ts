@@ -49,6 +49,11 @@ export function checkOpFireEligibility(
     return { canFire: false, isFinal: false, reason: 'Los Decoys no pueden disparar' }
   }
 
+  // Una unidad que ya disparó este turno no puede volver a disparar (ni Op Fire ni Final Op Fire)
+  if (firer.hasFiredThisTurn) {
+    return { canFire: false, isFinal: false, reason: 'La unidad ya ha disparado este turno' }
+  }
+
   const dist = hexDistance(firerHex.col, firerHex.row, targetHex.col, targetHex.row)
   const maxRange = firerStats.rangeMax ?? 0
   const effectiveMaxRange = (firerStats.rangeMax ?? 0) * 2  // Hasta 2× el rango para long range
