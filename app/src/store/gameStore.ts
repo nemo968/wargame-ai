@@ -1466,13 +1466,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ opsUsed: get().opsUsed + opsCost })
     }
 
-    // Concealment gain: si marcada como Used fuera del LOS enemigo en Beneficial Terrain (Regla 15.0)
+    // Concealment gain: solo infantería/cañones (no vehículos), no después de disparar,
+    // fuera de LOS enemiga (Regla 15.0 — sin requisito de terreno beneficioso)
     {
-      const freshState = get()
-      const hex = scenario.hexes.find(h => h.id === unit.position)
-      if (hex && !unit.isConcealed && hasBeneficialTerrain(hex) &&
-          isOutsideAllEnemyLOS(instanceId, freshState.units, scenario.hexes, freshState.smokeHexes)) {
-        get().updateUnit(instanceId, { isConcealed: true })
+      const cat = getUnitType(unit.unitTypeId)?.category
+      const canGainConcealment = cat !== 'vehicle' && cat !== 'aircraft' && cat !== 'decoy'
+      if (canGainConcealment && !unit.isConcealed && !unit.hasFiredThisTurn && unit.position) {
+        const freshState = get()
+        if (isOutsideAllEnemyLOS(instanceId, freshState.units, scenario.hexes, freshState.smokeHexes)) {
+          get().updateUnit(instanceId, { isConcealed: true })
+        }
       }
     }
 
@@ -1508,13 +1511,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const opsCost = getOpsCost(unit.unitTypeId)
     set({ opsUsed: get().opsUsed + opsCost })
 
-    // Concealment gain: fuera de LOS enemiga → gana ocultamiento (Regla 15.0)
+    // Concealment gain: solo infantería/cañones (no vehículos), fuera de LOS enemiga (Regla 15.0)
     {
-      const freshState = get()
-      const hex = scenario.hexes.find(h => h.id === unit.position)
-      if (hex && !unit.isConcealed && hasBeneficialTerrain(hex) &&
-          isOutsideAllEnemyLOS(instanceId, freshState.units, scenario.hexes, freshState.smokeHexes)) {
-        get().updateUnit(instanceId, { isConcealed: true })
+      const cat = getUnitType(unit.unitTypeId)?.category
+      const canGainConcealment = cat !== 'vehicle' && cat !== 'aircraft' && cat !== 'decoy'
+      if (canGainConcealment && !unit.isConcealed && unit.position) {
+        const freshState = get()
+        if (isOutsideAllEnemyLOS(instanceId, freshState.units, scenario.hexes, freshState.smokeHexes)) {
+          get().updateUnit(instanceId, { isConcealed: true })
+        }
       }
     }
 
@@ -1694,6 +1699,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const losResult = computeLOS(firerHex, targetHex, hexMap, get().smokeHexes)
     const hindrances = losResult.hindrance
 
+    // CP para bonus +1 FP (distinto del CP para extender rango que ya se cobró arriba)
+    const spendCPBonus = spendCPArg && !needsCP && commandPoints[opFireSide] > 0
+    if (spendCPBonus) get().useCommandPoint(opFireSide)
+
     const result = resolveOpFire({
       firer,
       firerHex,
@@ -1705,7 +1714,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       targetHasFlank:    target.hasFlank,
       targetIsConcealed: target.isConcealed,
       attackerIsOpFire:  firer.isOpFire,
-      spendCP:           spendCPArg && !needsCP && commandPoints[opFireSide] > 0,
+      spendCP:           spendCPBonus,
       isFinalOpFire:     isFinal,
       attackerHigher:    firerHex.elevation > targetHex.elevation,
       attackerLower:     firerHex.elevation < targetHex.elevation,
@@ -1813,7 +1822,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (!u.position) return
       const hex = hexes.find(h => h.id === u.position)
       if (!hex) return
-      if (hasBeneficialTerrain(hex) && isOutsideAllEnemyLOS(u.instanceId, allUnits, hexes, smokeHexes)) {
+      // Regla 15.0 despliegue: terreno beneficioso OR fuera de LOS enemiga (condiciones alternativas)
+      if (hasBeneficialTerrain(hex) || isOutsideAllEnemyLOS(u.instanceId, allUnits, hexes, smokeHexes)) {
         get().updateUnit(u.instanceId, { isConcealed: true })
       }
     })

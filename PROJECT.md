@@ -183,6 +183,8 @@ Referencias completas: `docs/Reglamento.pdf` (pp. 1–9) y `docs/Hoja de ayuda.p
 | `melee.ts` | Re-tirada CP usa resultado re-tirado (no best-of-two) |
 | `recovery.ts` | Limpia `hasCPToken: false` en Recovery Phase |
 | `gameStore.ts` | CP solo para infantería en `tryFireUnit`; `hasCPToken` guard en `spendCPForMovement`, `confirmMCRerollAndMove`; CP en Melee solo primera unidad por bando |
+| `gameStore.ts` | Concealment: vehículos excluidos de ganancia en juego; solo LOS requerida (sin terreno beneficioso); setup usa OR; `hasFiredThisTurn` guard en `endUnitActivation` |
+| `gameStore.ts` | Op Fire CP para +1 FP ahora descuenta `useCommandPoint` correctamente |
 
 ---
 

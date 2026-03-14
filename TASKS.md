@@ -125,6 +125,14 @@
 
 - [x] **Bug: FIN OPS bloqueado si unidades < opsMin** — `endUnitActivation` y `markUnitOpFire` auto-llaman `endSideOperations` cuando el bando activo no tiene más unidades activables, aunque `opsUsed < opsMin`.
 
+- [x] **Bugs Ocultamiento (Concealment) — 4 correcciones** — Verificado con NotebookLM (regla 15.0):
+  1. **Vehículos no deben ganar ocultamiento** durante el juego: `endUnitActivation` y `markUnitOpFire` ahora excluyen `vehicle`, `aircraft`, `decoy`.
+  2. **Terreno beneficioso NO requerido para ganancia en juego**: solo necesario estar fuera de LOS enemiga. Eliminada la condición `hasBeneficialTerrain` de ambas acciones.
+  3. **Setup usa OR en lugar de AND**: `completeSetup` ahora usa `hasBeneficialTerrain(hex) || isOutsideAllEnemyLOS(...)` (antes era `&&`).
+  4. **`hasFiredThisTurn` chequeado al marcar Used**: `endUnitActivation` no concede ocultamiento si la unidad disparó este turno.
+
+- [x] **Bug Op Fire — CP para +1 FP no se descontaba** — Verificado con NotebookLM (regla 9.0): `tryOpFireUnit` ahora llama `useCommandPoint` cuando `spendCPBonus` es `true` (CP para +1 FP, distinto del CP para extender rango de Final Op Fire).
+
 - [x] **Bugs CP (Command Points) — 4 correcciones** — Verificado con NotebookLM:
   1. **Límite 1 CP/unidad/turno**: añadido `hasCPToken: boolean` a `UnitInstance`. Se marca `true` al gastar el primer CP; se limpia en Recovery. Chequeado en `spendCPForMovement`, `confirmMCRerollAndMove` y fuego de infantería (`tryFireUnit`).
   2. **CP ignorado en vehículos/cañones**: eliminado el `useCommandPoint` anticipado en `tryFireUnit`; el CP solo se consume en la ruta de infantería (Ruta C). Los vehículos/cañones ya no pueden gastar CP en fuego.
