@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- Leg shaft -->
+  <rect x="11" y="3" width="9" height="13" rx="2" fill="#1a1a1a"/>
+  <!-- Foot/ankle -->
+  <path d="M11,15 L11,20 L9,20 L9,24 L27,24 L27,20 L20,20 L20,15 Z" fill="#1a1a1a"/>
+  <!-- Sole -->
+  <rect x="8" y="24" width="20" height="3" rx="1.5" fill="#222"/>
+  <!-- Highlight outline -->
+  <rect x="11" y="3" width="9" height="13" rx="2" fill="none" stroke="#e8d5a3" stroke-width="1"/>
+  <path d="M11,15 L11,20 L9,20 L9,24 L27,24 L27,20 L20,20 L20,15 Z" fill="none" stroke="#e8d5a3" stroke-width="1" stroke-linejoin="round"/>
+  <rect x="8" y="24" width="20" height="3" rx="1.5" fill="none" stroke="#e8d5a3" stroke-width="1"/>
+</svg>

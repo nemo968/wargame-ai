@@ -78,6 +78,9 @@ interface HexGridProps {
   opFireTargetHex?: string | null
   // Fog of war
   playerFaction?: string | null
+  // Cursor hints
+  validMoveHexIds?:    Set<string>
+  validFireTargetIds?: Set<string>
 }
 
 interface VB { x: number; y: number; w: number; h: number }
@@ -106,6 +109,8 @@ export default function HexGrid({
   setupHighlight = null,
   opFireTargetHex = null,
   playerFaction = null,
+  validMoveHexIds,
+  validFireTargetIds,
 }: HexGridProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const svgRef       = useRef<SVGSVGElement>(null)
@@ -297,6 +302,8 @@ export default function HexGrid({
                 : false}
               isOpFireTarget={hex.id === opFireTargetHex}
               playerFaction={playerFaction}
+              isValidMove={validMoveHexIds?.has(hex.id) ?? false}
+              validFireTargetIds={validFireTargetIds}
             />
           ))}
         </g>
@@ -330,8 +337,10 @@ interface HexCellProps {
   smokeState?:        'fresh' | 'dispersed'
   smokeMode?:         boolean
   isSetupZone?:       boolean
-  isOpFireTarget?:    boolean
-  playerFaction?:     string | null
+  isOpFireTarget?:     boolean
+  playerFaction?:      string | null
+  isValidMove?:        boolean
+  validFireTargetIds?: Set<string>
 }
 
 function HexCell({
@@ -343,6 +352,8 @@ function HexCell({
   isSetupZone = false,
   isOpFireTarget = false,
   playerFaction = null,
+  isValidMove = false,
+  validFireTargetIds,
 }: HexCellProps) {
   const [cx, cy] = hexCenterFromGrid(hex.col, hex.row, orientation, hexSize)
   const pts = hexVertexString(cx, cy, hexSize, orientation)
@@ -368,8 +379,10 @@ function HexCell({
   // La unidad de abajo se desplaza a la esquina inferior-derecha para ser visible
   const STACK_OFFSET = 7
 
+  const hexCursor = isValidMove ? "url('/cursor-boot.svg') 16 26, pointer" : 'pointer'
+
   return (
-    <g className="hex-cell" onClick={() => onHexClick(hex.id)} style={{ cursor: 'pointer' }}>
+    <g className="hex-cell" onClick={() => onHexClick(hex.id)} style={{ cursor: hexCursor }}>
 
       {/* Base del hexágono */}
       <polygon
@@ -502,6 +515,7 @@ function HexCell({
             onUnitClick={onUnitClick}
             onUnitRightClick={onUnitRightClick}
             fogOfWar={!!playerFaction && unit.isConcealed && unit.faction !== playerFaction}
+            isFireTarget={validFireTargetIds?.has(unit.instanceId) ?? false}
           />
         )
       })}
@@ -527,9 +541,10 @@ interface UnitCounterProps {
   onUnitClick:        (instanceId: string, e: React.MouseEvent) => void
   onUnitRightClick?:  (instanceId: string) => void
   fogOfWar?:          boolean  // unidad enemiga oculta — no revelar detalles
+  isFireTarget?:      boolean  // cursor de pistola al pasar el ratón
 }
 
-function UnitCounter({ unit, unitType, cx, cy, cW, cH, isSelected, onUnitClick, onUnitRightClick, fogOfWar = false }: UnitCounterProps) {
+function UnitCounter({ unit, unitType, cx, cy, cW, cH, isSelected, onUnitClick, onUnitRightClick, fogOfWar = false, isFireTarget = false }: UnitCounterProps) {
   const faction  = unit.faction
   const category = unitType?.category ?? 'squad'
   const bg       = FACTION_BG[faction]       ?? '#888'
@@ -556,12 +571,14 @@ function UnitCounter({ unit, unitType, cx, cy, cW, cH, isSelected, onUnitClick, 
 
   const isVehicleOrGun = category === 'vehicle' || category === 'gun'
 
+  const unitCursor = isFireTarget ? "url('/cursor-gun.svg') 30 12, crosshair" : 'pointer'
+
   // Fog of war: unidad enemiga oculta — solo mostrar silueta anónima
   if (fogOfWar) {
     return (
       <g
         onClick={(e) => { e.stopPropagation(); onUnitClick(unit.instanceId, e) }}
-        style={{ cursor: 'pointer' }}
+        style={{ cursor: unitCursor }}
       >
         <rect x={left} y={top} width={cW} height={cH} fill={bg} stroke={border} strokeWidth={1.5} rx={2} />
         <text
@@ -578,7 +595,7 @@ function UnitCounter({ unit, unitType, cx, cy, cW, cH, isSelected, onUnitClick, 
     <g
       onClick={(e) => { e.stopPropagation(); onUnitClick(unit.instanceId, e) }}
       onContextMenu={(e) => { e.stopPropagation(); e.preventDefault(); onUnitRightClick?.(unit.instanceId) }}
-      style={{ cursor: 'pointer' }}
+      style={{ cursor: unitCursor }}
       opacity={opacity}
     >
       {/* Sombra de selección */}

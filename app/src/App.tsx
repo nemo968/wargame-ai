@@ -4,7 +4,8 @@ import ScenarioSelect from './components/ScenarioSelect/ScenarioSelect'
 import HexGrid from './components/HexGrid/HexGrid'
 import PhaseBar from './components/PhaseBar/PhaseBar'
 import GamePanel from './components/GamePanel/GamePanel'
-import { getUnitType, computeLOS, buildHexMap } from './engine/mechanics'
+import { getUnitType, computeLOS, buildHexMap, hexDistance } from './engine/mechanics'
+import { playMoveSound, playFireSound } from './lib/sounds'
 import {
   isAISide,
   runAISetup,
@@ -227,6 +228,7 @@ export default function App() {
       if (unit && unit.faction === activeFaction && !unit.isUsed && !unit.isOpFire) {
         const res = tryMoveUnit(selectedUnit, hexId)
         if (res.ok) {
+          playMoveSound()
           const fmt = (n: number) => Number.isInteger(n) ? String(n) : n.toFixed(2)
           setActionMsg(`→ ${hexId} · ${fmt(res.remainingMPs!)} MP restantes`)
           addLog({ side: activeSide, message: `${unit.unitTypeId} → ${hexId} (coste ${fmt(res.cost!)} MP, quedan ${fmt(res.remainingMPs!)})`, type: 'action' })
@@ -266,6 +268,7 @@ export default function App() {
     if (pendingOpFire && selectedUnit && pendingOpFire.eligibleFirers.includes(selectedUnit) && instanceId === pendingOpFire.movingUnitId) {
       const res = tryOpFireUnit(selectedUnit, instanceId, spendCP)
       if (res.ok) {
+        playFireSound()
         setSpendCP(false)
         const outcome = res.result?.eliminated ? 'ELIMINADA'
           : res.result?.reduced ? 'REDUCIDA + SUPRIMIDA'
@@ -287,6 +290,7 @@ export default function App() {
       if (attacker && target && attacker.faction !== target.faction) {
         const res = tryFireUnit(selectedUnit, instanceId, spendCP)
         if (res.ok && res.result) {
+          playFireSound()
           setSpendCP(false)
           const outcome = res.result.eliminated ? 'ELIMINADA'
             : res.result.reduced ? 'REDUCIDA + SUPRIMIDA'
@@ -419,6 +423,48 @@ export default function App() {
     return map
   }, [unitList])
 
+  // ── Cursor hints: hexes donde la unidad seleccionada puede moverse ──────────
+  const validMoveHexIds = useMemo<Set<string>>(() => {
+    if (!selectedUnit || phase !== 'operations' || pendingOpFire || !scenario) return new Set()
+    const unit = units[selectedUnit]
+    if (!unit || !unit.position || unit.isUsed || unit.isOpFire) return new Set()
+    const activeFaction = activeSide === 'allied' ? scenario.allied.faction : scenario.axis.faction
+    if (unit.faction !== activeFaction) return new Set()
+    const unitHex = scenario.hexes.find(h => h.id === unit.position)
+    if (!unitHex) return new Set()
+    const remainingMPs = unitMPs[selectedUnit] ?? 5
+    const result = new Set<string>()
+    for (const hex of scenario.hexes) {
+      if (hex.id === unit.position) continue
+      if (hexDistance(unitHex.col, unitHex.row, hex.col, hex.row) <= remainingMPs) {
+        result.add(hex.id)
+      }
+    }
+    return result
+  }, [selectedUnit, units, phase, activeSide, pendingOpFire, scenario, unitMPs])
+
+  // ── Cursor hints: unidades enemigas sobre las que se puede disparar ──────────
+  const validFireTargetIds = useMemo<Set<string>>(() => {
+    if (!selectedUnit || phase !== 'operations' || !scenario) return new Set()
+    const unit = units[selectedUnit]
+    if (!unit) return new Set()
+    const result = new Set<string>()
+    // Fuego normal: unidades enemigas cuando la unidad seleccionada puede disparar
+    if (!pendingOpFire && !unit.isUsed) {
+      const activeFaction = activeSide === 'allied' ? scenario.allied.faction : scenario.axis.faction
+      if (unit.faction === activeFaction) {
+        for (const [id, u] of Object.entries(units)) {
+          if (u.faction !== unit.faction && u.position !== null) result.add(id)
+        }
+      }
+    }
+    // Op Fire: la unidad en movimiento si la seleccionada es tiradora elegible
+    if (pendingOpFire && pendingOpFire.eligibleFirers.includes(selectedUnit)) {
+      result.add(pendingOpFire.movingUnitId)
+    }
+    return result
+  }, [selectedUnit, units, phase, activeSide, pendingOpFire, scenario])
+
   const selectedUnitData   = selectedUnit ? units[selectedUnit] ?? null : null
   const selectedUnitMPs    = selectedUnit ? (unitMPs[selectedUnit] ?? null) : null
   const selectedHexData    = selectedHex
@@ -484,6 +530,8 @@ export default function App() {
             } : null}
             opFireTargetHex={pendingOpFire?.enteredHexId ?? null}
             playerFaction={playerFaction}
+            validMoveHexIds={validMoveHexIds}
+            validFireTargetIds={validFireTargetIds}
           />
           <div className="absolute top-3 left-3 flex items-center gap-2">
             <div className="bg-panel/80 border border-border-military rounded px-3 py-1 pointer-events-none">
